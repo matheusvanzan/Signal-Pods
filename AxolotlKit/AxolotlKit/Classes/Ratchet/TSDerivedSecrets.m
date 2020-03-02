@@ -1,20 +1,17 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
 #import "TSDerivedSecrets.h"
+#import "HKDFKit.h"
 #import <Curve25519Kit/Curve25519.h>
-#import <HKDFKit/HKDFKit.h>
 
 @implementation TSDerivedSecrets
 
-+ (instancetype)throws_derivedSecretsWithSeed:(NSData *)masterKey salt:(NSData *)salt info:(NSData *)info
-{
-    OWSAssert(masterKey.length == 32);
-    OWSAssert(info);
-
++ (instancetype)derivedSecretsWithSeed:(NSData*)masterKey salt:(NSData*)salt info:(NSData*)info{
     TSDerivedSecrets *secrets = [[TSDerivedSecrets alloc] init];
-    OWSAssert(secrets);
+
+    SPKAssert(masterKey.length == ECCKeyLength);
 
     if (!salt) {
         const char *HKDFDefaultSalt[4] = {0};
@@ -22,7 +19,7 @@
     }
     
     @try {
-        NSData *derivedMaterial = [HKDFKit throws_deriveKey:masterKey info:info salt:salt outputSize:96];
+        NSData *derivedMaterial = [HKDFKit deriveKey:masterKey info:info salt:salt outputSize:96];
         secrets.cipherKey       = [derivedMaterial subdataWithRange:NSMakeRange(0, 32)];
         secrets.macKey          = [derivedMaterial subdataWithRange:NSMakeRange(32, 32)];
         secrets.iv              = [derivedMaterial subdataWithRange:NSMakeRange(64, 16)];
@@ -31,36 +28,25 @@
         @throw NSInvalidArgumentException;
     }
 
-    OWSAssert(secrets.cipherKey.length == 32);
-    OWSAssert(secrets.macKey.length == 32);
-    OWSAssert(secrets.iv.length == 16);
+    SPKAssert(secrets.cipherKey.length == ECCKeyLength);
+    SPKAssert(secrets.macKey.length == ECCKeyLength);
 
     return secrets;
 }
 
-+ (instancetype)throws_derivedInitialSecretsWithMasterKey:(NSData *)masterKey
-{
-    OWSAssert(masterKey);
-
++ (instancetype)derivedInitialSecretsWithMasterKey:(NSData*)masterKey{
     NSData *info = [@"WhisperText" dataUsingEncoding:NSUTF8StringEncoding];
-    return [self throws_derivedSecretsWithSeed:masterKey salt:nil info:info];
+    return [self derivedSecretsWithSeed:masterKey salt:nil info:info];
 }
 
-+ (instancetype)throws_derivedRatchetedSecretsWithSharedSecret:(NSData *)masterKey rootKey:(NSData *)rootKey
-{
-    OWSAssert(masterKey);
-    OWSAssert(rootKey);
-
++ (instancetype)derivedRatchetedSecretsWithSharedSecret:(NSData*)masterKey rootKey:(NSData*)rootKey{
     NSData *info = [@"WhisperRatchet" dataUsingEncoding:NSUTF8StringEncoding];
-    return [self throws_derivedSecretsWithSeed:masterKey salt:rootKey info:info];
+    return [self derivedSecretsWithSeed:masterKey salt:rootKey info:info];
 }
 
-+ (instancetype)throws_derivedMessageKeysWithData:(NSData *)data
-{
-    OWSAssert(data);
-
++ (instancetype)derivedMessageKeysWithData:(NSData*)data{
     NSData *info = [@"WhisperMessageKeys" dataUsingEncoding:NSUTF8StringEncoding];
-    return [self throws_derivedSecretsWithSeed:data salt:nil info:info];
+    return [self derivedSecretsWithSeed:data salt:nil info:info];
 }
 
 @end

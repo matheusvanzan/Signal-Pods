@@ -16,28 +16,13 @@
     "git": "https://github.com/FredericJacobs/HKDFKit.git",
     "tag": "0.0.3"
   },
-  "source_files": [
-    "HKDFKit/HKDFKit/*.{h,m,mm,swift}",
-    "HKDFKit/Private/*.{h,m,mm,swift}"
-  ],
+  "source_files": "HKDFKit/HKDFKit/*{h,m}",
   "public_header_files": "HKDFKit/HKDFKit/*.h",
-  "platforms": {
-    "ios": "9.0"
-  },
   "requires_arc": true,
-  "dependencies": {
-    "CocoaLumberjack": [
-
-    ],
-    "SignalCoreKit": [
-
-    ]
-  },
-  "testspecs": [
-    {
-      "name": "Tests",
-      "test_type": "unit",
-      "source_files": "HKDFKit/HKDFKitTests/**/*.{h,m,swift}"
-    }
-  ]
+  "platforms": {
+    "osx": null,
+    "ios": null,
+    "tvos": null,
+    "watchos": null
+  }
 }

@@ -472,16 +472,12 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 		  (YapDatabaseCloudKitRecordWithKeyBlock)recordHandler->block;
 		
 		RestoreRecordBlock = ^(int64_t rowid, CKRecord **inOutRecord, YDBCKRecordInfo *recordInfo) {
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 			
 			YapCollectionKey *ck = [databaseTransaction collectionKeyForRowid:rowid];
 			if (ck)
 			{
 				recordBlock(databaseTransaction, inOutRecord, recordInfo, ck.collection, ck.key);
 			}
-			
-		#pragma clang diagnostic pop
 		};
 	}
 	else if (recordHandler->blockType == YapDatabaseBlockTypeWithObject)
@@ -490,8 +486,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 		  (YapDatabaseCloudKitRecordWithObjectBlock)recordHandler->block;
 		
 		RestoreRecordBlock = ^(int64_t rowid, CKRecord **inOutRecord, YDBCKRecordInfo *recordInfo) {
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 			
 			YapCollectionKey *ck = nil;
 			id object = nil;
@@ -500,8 +494,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			{
 				recordBlock(databaseTransaction, inOutRecord, recordInfo, ck.collection, ck.key, object);
 			}
-			
-		#pragma clang diagnostic pop
 		};
 	}
 	else if (recordHandler->blockType == YapDatabaseBlockTypeWithMetadata)
@@ -510,8 +502,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 		  (YapDatabaseCloudKitRecordWithMetadataBlock)recordHandler->block;
 		
 		RestoreRecordBlock = ^(int64_t rowid, CKRecord **inOutRecord, YDBCKRecordInfo *recordInfo) {
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 			
 			YapCollectionKey *ck = nil;
 			id metadata = nil;
@@ -520,8 +510,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			{
 				recordBlock(databaseTransaction, inOutRecord, recordInfo, ck.collection, ck.key, metadata);
 			}
-			
-		#pragma clang diagnostic pop
 		};
 	}
 	else // if (recordHandler->blockType == YapDatabaseBlockTypeWithRow)
@@ -530,8 +518,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 		  (YapDatabaseCloudKitRecordWithRowBlock)recordHandler->block;
 		
 		RestoreRecordBlock = ^(int64_t rowid, CKRecord **inOutRecord, YDBCKRecordInfo *recordInfo) {
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 			
 			YapCollectionKey *ck = nil;
 			id object = nil;
@@ -541,8 +527,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			{
 				recordBlock(databaseTransaction, inOutRecord, recordInfo, ck.collection, ck.key, object, metadata);
 			}
-			
-		#pragma clang diagnostic pop
 		};
 	}
 	
@@ -592,8 +576,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 	
 	void (^InsertRecord)(CKRecord*, YDBCKRecordInfo*, int64_t);
 	InsertRecord = ^(CKRecord *record, YDBCKRecordInfo *recordInfo, int64_t rowid) {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		NSString *databaseIdentifier = recordInfo.databaseIdentifier;
 		NSString *hash = [self hashRecordID:record.recordID databaseIdentifier:databaseIdentifier];
@@ -633,8 +615,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			[dirtyRecordTableInfo incrementOwnerCount];
 			[dirtyRecordTableInfo mergeOriginalValues:recordInfo.originalValues];
 		}
-		
-	#pragma clang diagnostic pop
 	};
 	
 	YDBCKRecordInfo *recordInfo = [[YDBCKRecordInfo alloc] init];
@@ -656,7 +636,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			recordInfo.databaseIdentifier = nil;
 			recordInfo.originalValues = nil;
 			
-			recordBlock(self->databaseTransaction, &record, recordInfo, collection, key);
+			recordBlock(databaseTransaction, &record, recordInfo, collection, key);
 			
 			if (record) {
 				InsertRecord(record, recordInfo, rowid);
@@ -669,7 +649,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 				
 				if ([allowedCollections isAllowed:collection])
 				{
-					[self->databaseTransaction _enumerateKeysInCollections:@[ collection ] usingBlock:enumBlock];
+					[databaseTransaction _enumerateKeysInCollections:@[ collection ] usingBlock:enumBlock];
 				}
 			}];
 		}
@@ -690,7 +670,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			recordInfo.databaseIdentifier = nil;
 			recordInfo.originalValues = nil;
 			
-			recordBlock(self->databaseTransaction, &record, recordInfo, collection, key, object);
+			recordBlock(databaseTransaction, &record, recordInfo, collection, key, object);
 			
 			if (record) {
 				InsertRecord(record, recordInfo, rowid);
@@ -703,7 +683,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 				
 				if ([allowedCollections isAllowed:collection])
 				{
-					[self->databaseTransaction _enumerateKeysAndObjectsInCollections:@[ collection ] usingBlock:enumBlock];
+					[databaseTransaction _enumerateKeysAndObjectsInCollections:@[ collection ] usingBlock:enumBlock];
 				}
 			}];
 		}
@@ -724,7 +704,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			recordInfo.databaseIdentifier = nil;
 			recordInfo.originalValues = nil;
 			
-			recordBlock(self->databaseTransaction, &record, recordInfo, collection, key, metadata);
+			recordBlock(databaseTransaction, &record, recordInfo, collection, key, metadata);
 			
 			if (record) {
 				InsertRecord(record, recordInfo, rowid);
@@ -737,7 +717,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 				
 				if ([allowedCollections isAllowed:collection])
 				{
-					[self->databaseTransaction _enumerateKeysAndMetadataInCollections:@[ collection ] usingBlock:enumBlock];
+					[databaseTransaction _enumerateKeysAndMetadataInCollections:@[ collection ] usingBlock:enumBlock];
 				}
 			}];
 		}
@@ -758,7 +738,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			recordInfo.databaseIdentifier = nil;
 			recordInfo.originalValues = nil;
 			
-			recordBlock(self->databaseTransaction, &record, recordInfo, collection, key, object, metadata);
+			recordBlock(databaseTransaction, &record, recordInfo, collection, key, object, metadata);
 			
 			if (record) {
 				InsertRecord(record, recordInfo, rowid);
@@ -771,7 +751,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 				
 				if ([allowedCollections isAllowed:collection])
 				{
-					[self->databaseTransaction _enumerateRowsInCollections:@[ collection ] usingBlock:enumBlock];
+					[databaseTransaction _enumerateRowsInCollections:@[ collection ] usingBlock:enumBlock];
 				}
 			}];
 		}
@@ -836,7 +816,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 		enumBlock = ^(int64_t rowid, NSString *collection, NSString *key, BOOL *stop) {
 			
 			enumHelperBlock(rowid);
-			recordBlock(self->databaseTransaction, &record, recordInfo, collection, key);
+			recordBlock(databaseTransaction, &record, recordInfo, collection, key);
 			
 			[self processRecord:record recordInfo:recordInfo
 			                    preCalculatedHash:nil
@@ -852,7 +832,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 				
 				if ([allowedCollections isAllowed:collection])
 				{
-					[self->databaseTransaction _enumerateKeysInCollections:@[ collection ] usingBlock:enumBlock];
+					[databaseTransaction _enumerateKeysInCollections:@[ collection ] usingBlock:enumBlock];
 				}
 			}];
 		}
@@ -870,7 +850,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 		enumBlock = ^(int64_t rowid, NSString *collection, NSString *key, id object, BOOL *stop) {
 			
 			enumHelperBlock(rowid);
-			recordBlock(self->databaseTransaction, &record, recordInfo, collection, key, object);
+			recordBlock(databaseTransaction, &record, recordInfo, collection, key, object);
 			
 			[self processRecord:record recordInfo:recordInfo
 			                    preCalculatedHash:nil
@@ -886,7 +866,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 				
 				if ([allowedCollections isAllowed:collection])
 				{
-					[self->databaseTransaction _enumerateKeysAndObjectsInCollections:@[ collection ] usingBlock:enumBlock];
+					[databaseTransaction _enumerateKeysAndObjectsInCollections:@[ collection ] usingBlock:enumBlock];
 				}
 			}];
 		}
@@ -904,7 +884,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 		enumBlock = ^(int64_t rowid, NSString *collection, NSString *key, id metadata, BOOL *stop) {
 			
 			enumHelperBlock(rowid);
-			recordBlock(self->databaseTransaction, &record, recordInfo, collection, key, metadata);
+			recordBlock(databaseTransaction, &record, recordInfo, collection, key, metadata);
 			
 			[self processRecord:record recordInfo:recordInfo
 			                    preCalculatedHash:nil
@@ -920,7 +900,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 				
 				if ([allowedCollections isAllowed:collection])
 				{
-					[self->databaseTransaction _enumerateKeysAndMetadataInCollections:@[ collection ] usingBlock:enumBlock];
+					[databaseTransaction _enumerateKeysAndMetadataInCollections:@[ collection ] usingBlock:enumBlock];
 				}
 			}];
 		}
@@ -938,7 +918,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 		enumBlock = ^(int64_t rowid, NSString *collection, NSString *key, id object, id metadata, BOOL *stop) {
 			
 			enumHelperBlock(rowid);
-			recordBlock(self->databaseTransaction, &record, recordInfo, collection, key, object, metadata);
+			recordBlock(databaseTransaction, &record, recordInfo, collection, key, object, metadata);
 			
 			[self processRecord:record recordInfo:recordInfo
 			                    preCalculatedHash:nil
@@ -954,7 +934,7 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 				
 				if ([allowedCollections isAllowed:collection])
 				{
-					[self->databaseTransaction _enumerateRowsInCollections:@[ collection ] usingBlock:enumBlock];
+					[databaseTransaction _enumerateRowsInCollections:@[ collection ] usingBlock:enumBlock];
 				}
 			}];
 		}
@@ -2918,8 +2898,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 	// Update mapping table.
 	
 	[parentConnection->dirtyMappingTableInfoDict enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		__unsafe_unretained NSNumber *rowidNumber = (NSNumber *)key;
 		__unsafe_unretained YDBCKDirtyMappingTableInfo *dirtyMappingTableInfo = (YDBCKDirtyMappingTableInfo *)obj;
@@ -2945,8 +2923,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			[parentConnection->changeset_mappingTableInfo setObject:cleanMappingTableInfo forKey:rowidNumber];
 			[parentConnection->cleanMappingTableInfoCache setObject:cleanMappingTableInfo forKey:rowidNumber];
 		}
-		
-	#pragma clang diagnostic pop
 	}];
 	
 	// Step 2 of 6:
@@ -2954,8 +2930,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 	// Update record table.
 	
 	[parentConnection->dirtyRecordTableInfoDict enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		__unsafe_unretained NSString *hash = (NSString *)key;
 		__unsafe_unretained YDBCKDirtyRecordTableInfo *dirtyRecordTableInfo = (YDBCKDirtyRecordTableInfo *)obj;
@@ -3011,8 +2985,6 @@ static BOOL ClassVersionsAreCompatible(int oldClassVersion, int newClassVersion)
 			[parentConnection->changeset_recordTableInfo setObject:cleanRecordTableInfo forKey:hash];
 			[parentConnection->cleanRecordTableInfoCache setObject:cleanRecordTableInfo forKey:hash];
 		}
-		
-	#pragma clang diagnostic pop
 	}];
 	
 	// Step 3 of 6:

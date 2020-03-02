@@ -2,11 +2,7 @@
 //  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
 //
 
-#import <Foundation/Foundation.h>
-
 NS_ASSUME_NONNULL_BEGIN
-
-@class YapDatabaseOptions;
 
 #ifdef SQLITE_HAS_CODEC
 
@@ -143,7 +139,6 @@ typedef BOOL (^YapRecordDatabaseSaltBlock)(NSData *saltData);
 //   for this database. Within that block you must store the salt somewhere durable.
 + (nullable NSError *)convertDatabaseIfNecessary:(NSString *)databaseFilePath
                                 databasePassword:(NSData *)databasePassword
-                                         options:(YapDatabaseOptions *)options
                                  recordSaltBlock:(YapRecordDatabaseSaltBlock)recordSaltBlock;
 
 // This method can be used to derive a SQLCipher "key spec" from a

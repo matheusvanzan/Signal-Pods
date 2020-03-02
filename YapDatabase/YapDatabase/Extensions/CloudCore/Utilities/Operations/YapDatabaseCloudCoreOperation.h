@@ -152,7 +152,6 @@
 
 /**
  * Compares the receiver with the given operation.
- * Subclasses should override this method, and add their own comparisons.
 **/
 - (BOOL)isEqualToOperation:(YapDatabaseCloudCoreOperation *)operation;
 

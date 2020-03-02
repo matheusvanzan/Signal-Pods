@@ -112,6 +112,11 @@ static NSString *const ext_key_class = @"class";
 + (NSDictionary *)columnNamesAndAffinityForTable:(NSString *)tableName using:(sqlite3 *)aDb;
 
 /**
+ * New connections inherit their default values from this structure.
+**/
+- (YapDatabaseConnectionConfig *)connectionDefaults;
+
+/**
  * Called from YapDatabaseConnection's dealloc method to remove connection's state from connectionStates array.
 **/
 - (void)removeConnection:(YapDatabaseConnection *)connection;
@@ -189,6 +194,11 @@ static NSString *const ext_key_class = @"class";
 - (BOOL)configureEncryptionForDatabase:(sqlite3 *)sqlite;
 #endif
 
+// These methods can be used when you want to block on
+// YapDatabase closing and being deallocated.
+- (void)flushInternalQueue;
+- (void)flushCheckpointQueue;
+
 @end
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -227,7 +237,6 @@ static NSString *const ext_key_class = @"class";
 	
 	NSMutableDictionary *objectChanges;
 	NSMutableDictionary *metadataChanges;
-	NSMutableSet *insertedKeys;
 	NSMutableSet *removedKeys;
 	NSMutableSet *removedCollections;
 	NSMutableSet *removedRowids;
@@ -237,8 +246,7 @@ static NSString *const ext_key_class = @"class";
 	YapMutationStack_Bool *mutationStack;
 }
 
-- (instancetype)initWithDatabase:(YapDatabase *)database;
-- (instancetype)initWithDatabase:(YapDatabase *)database config:(YapDatabaseConnectionConfig *)config;
+- (id)initWithDatabase:(YapDatabase *)database;
 
 - (sqlite3_stmt *)beginTransactionStatement;
 - (sqlite3_stmt *)beginImmediateTransactionStatement;

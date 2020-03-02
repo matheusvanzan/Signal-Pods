@@ -132,10 +132,10 @@
 		
 		[inOriginalValues enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL *stop) {
 			
-			if ([self->originalValues objectForKey:key] == nil)
+			if ([originalValues objectForKey:key] == nil)
 			{
 				if (newOriginalValues == nil)
-					newOriginalValues = [self->originalValues mutableCopy];
+					newOriginalValues = [originalValues mutableCopy];
 				
 				[newOriginalValues setObject:obj forKey:key];
 			}

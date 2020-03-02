@@ -41,9 +41,6 @@ static NSString* const kCoderMessageKeys   = @"kCoderMessageKeys";
 }
 
 - (instancetype)initWithChainKey:(ChainKey *)chainKey senderRatchetKey:(NSData *)senderRatchet{
-    OWSAssert(chainKey);
-    OWSAssert(senderRatchet);
-
     self = [super init];
 
     self.chainKey         = chainKey;

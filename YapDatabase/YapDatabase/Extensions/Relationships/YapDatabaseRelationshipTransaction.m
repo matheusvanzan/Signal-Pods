@@ -528,7 +528,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 				[edges addObject:cleanEdge];
 			}
 			
-			[self->parentConnection->protocolChanges setObject:edges forKey:@(rowid)];
+			[parentConnection->protocolChanges setObject:edges forKey:@(rowid)];
 		}
 	};
 	
@@ -541,7 +541,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 			
 			if ([allowedCollections isAllowed:collection])
 			{
-				[self->databaseTransaction _enumerateKeysAndObjectsInCollection:collection usingBlock:
+				[databaseTransaction _enumerateKeysAndObjectsInCollection:collection usingBlock:
 				    ^(int64_t rowid, NSString *key, id object, BOOL __unused *innerStop)
 				{
 					ProcessRow(rowid, collection, key, object);
@@ -1983,25 +1983,28 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 }
 
 /**
- * Queries the database for the number of edges matching the given source.
+ * Queries the database for the number of edges matching the given source and name.
  * This method only queries the database, and doesn't inspect anything in memory.
 **/
-- (int64_t)edgeCountWithSource:(int64_t)srcRowid
-          excludingDestination:(int64_t)dstRowid
+- (int64_t)edgeCountWithSource:(int64_t)srcRowid name:(NSString *)name excludingDestination:(int64_t)dstRowid
 {
-	sqlite3_stmt *statement = [parentConnection countForSrcExcludingDstStatement];
+	sqlite3_stmt *statement = [parentConnection countForSrcNameExcludingDstStatement];
 	if (statement == NULL) return 0;
 	
 	int64_t count = 0;
 	
-	// SELECT COUNT(*) AS NumberOfRows FROM "tableName" WHERE "src" = ? AND "dst" != ?;
+	// SELECT COUNT(*) AS NumberOfRows FROM "tableName" WHERE "src" = ? AND "dst" != ? AND "name" = ?;
 	
 	int const column_idx_count = SQLITE_COLUMN_START;
 	int const bind_idx_src     = SQLITE_BIND_START + 0;
 	int const bind_idx_dst     = SQLITE_BIND_START + 1;
+	int const bind_idx_name    = SQLITE_BIND_START + 2;
 	
 	sqlite3_bind_int64(statement, bind_idx_src, srcRowid);
 	sqlite3_bind_int64(statement, bind_idx_dst, dstRowid);
+	
+	YapDatabaseString _name; MakeYapDatabaseString(&_name, name);
+	sqlite3_bind_text(statement, bind_idx_name, _name.str, _name.length, SQLITE_STATIC);
 	
 	int status = sqlite3_step(statement);
 	if (status == SQLITE_ROW)
@@ -2016,30 +2019,36 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 	
 	sqlite3_clear_bindings(statement);
 	sqlite3_reset(statement);
+	FreeYapDatabaseString(&_name);
 	
 	return count;
 }
 
 /**
- * Queries the database for the number of edges matching the given destination.
+ * Queries the database for the number of edges matching the given destination and name.
  * This method only queries the database, and doesn't inspect anything in memory.
 **/
-- (int64_t)edgeCountWithDestination:(int64_t)dstRowid
-                    excludingSource:(int64_t)srcRowid
+- (int64_t)edgeCountWithDestination:(int64_t)dstRowid name:(NSString *)name excludingSource:(int64_t)srcRowid
 {
-	sqlite3_stmt *statement = [parentConnection countForDstExcludingSrcStatement];
+	NSAssert(name != nil, @"Internal logic error");
+	
+	sqlite3_stmt *statement = [parentConnection countForDstNameExcludingSrcStatement];
 	if (statement == NULL) return 0;
 	
 	int64_t count = 0;
 	
-	// SELECT COUNT(*) AS NumberOfRows FROM "tableName" WHERE "dst" = ? AND "src" != ?;
+	// SELECT COUNT(*) AS NumberOfRows FROM "tableName" WHERE "dst" = ? AND "src" != ? AND "name" = ?;
 	
 	int const column_idx_count = SQLITE_COLUMN_START;
 	int const bind_idx_dst     = SQLITE_BIND_START + 0;
 	int const bind_idx_src     = SQLITE_BIND_START + 1;
+	int const bind_idx_name    = SQLITE_BIND_START + 2;
 	
 	sqlite3_bind_int64(statement, bind_idx_dst, dstRowid);
 	sqlite3_bind_int64(statement, bind_idx_src, srcRowid);
+	
+	YapDatabaseString _name; MakeYapDatabaseString(&_name, name);
+	sqlite3_bind_text(statement, bind_idx_name, _name.str, _name.length, SQLITE_STATIC);
 	
 	int status = sqlite3_step(statement);
 	if (status == SQLITE_ROW)
@@ -2054,6 +2063,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 	
 	sqlite3_clear_bindings(statement);
 	sqlite3_reset(statement);
+	FreeYapDatabaseString(&_name);
 	
 	return count;
 }
@@ -2063,31 +2073,36 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
  * This method only queries the database, and doesn't inspect anything in memory.
 **/
 - (int64_t)edgeCountWithDestinationFileURL:(NSURL *)dstFileURL
+                                      name:(NSString *)name
                            excludingSource:(int64_t)exclSrcRowid
 {
 	NSAssert(dstFileURL != nil, @"Internal logic error");
+	NSAssert(name != nil, @"Internal logic error");
 	
 	BOOL needsFinalize;
-	sqlite3_stmt *statement = [parentConnection enumerateDstFileURLExcludingSrcStatement:&needsFinalize];
+	sqlite3_stmt *statement = [parentConnection enumerateDstFileURLWithNameExcludingSrcStatement:&needsFinalize];
 	if (statement == NULL) return 0;
 	
 	int64_t count = 0;
 	
-	// SELECT "rowid", "name", "src", "dst", "rules", "manual" FROM "tableName"
-	//  WHERE "dst" > INT64_MAX AND "src" != ?;
+	// SELECT "rowid", "src", "dst", "rules", "manual" FROM "tableName"
+	//  WHERE "dst" > INT64_MAX AND "src" != ? AND "name" = ?;
 	//
 	// AKA: typeof(dst) IS BLOB
 	
 	int const column_idx_rowid  = SQLITE_COLUMN_START + 0;
-	int const column_idx_name   = SQLITE_COLUMN_START + 1;
-	int const column_idx_src    = SQLITE_COLUMN_START + 2;
-	int const column_idx_dst    = SQLITE_COLUMN_START + 3;
-	int const column_idx_rules  = SQLITE_COLUMN_START + 4;
-	int const column_idx_manual = SQLITE_COLUMN_START + 5;
+	int const column_idx_src    = SQLITE_COLUMN_START + 1;
+	int const column_idx_dst    = SQLITE_COLUMN_START + 2;
+	int const column_idx_rules  = SQLITE_COLUMN_START + 3;
+	int const column_idx_manual = SQLITE_COLUMN_START + 4;
 	
 	int const bind_idx_src = SQLITE_BIND_START + 0;
-
+	int const bind_idx_name = SQLITE_BIND_START + 1;
+	
 	sqlite3_bind_int64(statement, bind_idx_src, exclSrcRowid);
+	
+	YapDatabaseString _name; MakeYapDatabaseString(&_name, name);
+	sqlite3_bind_text(statement, bind_idx_name, _name.str, _name.length, SQLITE_STATIC);
 	
 	int status;
 	while ((status = sqlite3_step(statement)) == SQLITE_ROW)
@@ -2103,11 +2118,6 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 		else
 		{
 			int64_t srcRowid = sqlite3_column_int64(statement, column_idx_src);
-			
-			const unsigned char *text = sqlite3_column_text(statement, column_idx_name);
-			int textSize = sqlite3_column_bytes(statement, column_idx_name);
-			
-			NSString *name = [[NSString alloc] initWithBytes:text length:textSize encoding:NSUTF8StringEncoding];
 			
 			int64_t dstRowid = 0;
 			NSData *dstFileURLData = nil;
@@ -2154,6 +2164,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 	}
 	
 	sqlite3_reset(statement);
+	FreeYapDatabaseString(&_name);
 	
 	return count;
 }
@@ -2420,9 +2431,23 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 	//
 	// Pre-process the updated edges.
 	// This involves looking up the destinationRowid for each edge.
+	//
+	// Implementation details:
+	//
+	// We use the offset & protocolEdgesCount to mark the range of unprocessed edges in the array:
+	// - All nodes at index < offset have already been processed.
+	// - All nodes at index >= protocolEdgesCount were added to the array and should be ignored.
+	//
+	// These added nodes represent existing edges in the database that were
+	// implicitly deleted by removing from edge list.
 	
-	for (YapDatabaseRelationshipEdge *edge in protocolEdges)
+	__block NSUInteger offset = 0;
+	NSUInteger protocolEdgesCount = [protocolEdges count];
+	
+	for (NSUInteger i = 0; i < protocolEdgesCount; i++)
 	{
+		YapDatabaseRelationshipEdge *edge = [protocolEdges objectAtIndex:i];
+		
 		if (edge->state & YDB_EdgeState_DestinationFileURL)
 		{
 			continue;
@@ -2444,38 +2469,23 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 				edge->action = YDB_EdgeAction_Delete;
 				edge->flags |= YDB_EdgeFlags_DestinationDeleted;
 				edge->flags |= YDB_EdgeFlags_BadDestination;
+				
+				[protocolEdges exchangeObjectAtIndex:i withObjectAtIndex:offset];
+				offset++;
 			}
 			else if (dstDeleted)
 			{
 				edge->action = YDB_EdgeAction_Delete;
 				edge->flags |= YDB_EdgeFlags_DestinationDeleted;
 			}
-			
-			// Note: We're not done processing this edge yet.
-			// We still don't know if it actually exists in the databse yet.
-			// So we may not need to (be able to) delete it.
 		}
 	}
 	
 	// Step 2 :
 	//
 	// Enumerate the existing edges in the database, and try to match them up with edges from the new set.
-	//
-	// Implementation notes:
-	//
-	// We use the offset & protocolEdgesCount to mark the range of unprocessed edges in the array:
-	// - All nodes at index < offset have already been matched.
-	// - All nodes at index >= protocolEdgesCount were added to the array and should be ignored (by step 3).
-	//
-	// These added nodes represent existing edges in the database that were
-	// implicitly deleted by removing from edge list.
-	
-	__block NSUInteger offset = 0;
-	NSUInteger protocolEdgesCount = protocolEdges.count;
 	
 	[self enumerateExistingEdgesWithSource:srcRowid usingBlock:^(YapDatabaseRelationshipEdge *existingEdge) {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		// Ignore manually created edges
 		if (existingEdge->isManualEdge) return; // continue (next matching row)
@@ -2558,11 +2568,8 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 			}
 			
 			[protocolEdges addObject:edge];
-			// Do NOT increment offset.
-			// Do NOT increment protocolEdgesCount.
+			// Note: Do NOT increment protocolEdgesCount.
 		}
-		
-	#pragma clang diagnostic pop
 	}];
 	
 	// Step 3 :
@@ -2573,12 +2580,13 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 	{
 		YapDatabaseRelationshipEdge *edge = [protocolEdges objectAtIndex:i];
 		
-		edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
+		edge->action = YDB_EdgeAction_Insert;
 		
 		if (srcDeleted)
 		{
 			edge->action = YDB_EdgeAction_Delete;
 			edge->flags |= YDB_EdgeFlags_SourceDeleted;
+			edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
 		}
 		
 		if (!(edge->state & YDB_EdgeState_DestinationFileURL) &&
@@ -2586,11 +2594,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 		{
 			edge->action = YDB_EdgeAction_Delete;
 			edge->flags |= YDB_EdgeFlags_DestinationDeleted;
-		}
-		
-		if (edge->action == YDB_EdgeAction_None) // May have been set to Delete in step 1
-		{
-			edge->action = YDB_EdgeAction_Insert;
+			edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
 		}
 	}
 }
@@ -2621,17 +2625,29 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 				edge->action = YDB_EdgeAction_Delete;
 				edge->flags |= YDB_EdgeFlags_SourceDeleted;
 				edge->flags |= YDB_EdgeFlags_BadSource;
+                if (!(edge->state & YDB_EdgeState_HasEdgeRowid))
+                {
+                    edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
+                }
 			}
 			else if (srcDeleted)
 			{
 				edge->action = YDB_EdgeAction_Delete;
 				edge->flags |= YDB_EdgeFlags_SourceDeleted;
+                if (!(edge->state & YDB_EdgeState_HasEdgeRowid))
+                {
+                    edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
+                }
 			}
 		}
 		else if ([parentConnection->deletedInfo ydb_containsKey:@(edge->sourceRowid)])
 		{
 			edge->action = YDB_EdgeAction_Delete;
 			edge->flags |= YDB_EdgeFlags_SourceDeleted;
+            if (!(edge->state & YDB_EdgeState_HasEdgeRowid))
+            {
+                edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
+            }
 		}
 		
 		
@@ -2655,27 +2671,29 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 				edge->action = YDB_EdgeAction_Delete;
 				edge->flags |= YDB_EdgeFlags_DestinationDeleted;
 				edge->flags |= YDB_EdgeFlags_BadDestination;
+                if (!(edge->state & YDB_EdgeState_HasEdgeRowid))
+                {
+                    edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
+                }
 			}
 			else if (dstDeleted)
 			{
 				edge->action = YDB_EdgeAction_Delete;
 				edge->flags |= YDB_EdgeFlags_DestinationDeleted;
+                if (!(edge->state & YDB_EdgeState_HasEdgeRowid))
+                {
+                    edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
+                }
 			}
 		}
 		else if ([parentConnection->deletedInfo ydb_containsKey:@(edge->destinationRowid)])
 		{
 			edge->action = YDB_EdgeAction_Delete;
 			edge->flags |= YDB_EdgeFlags_DestinationDeleted;
-		}
-		
-		// Ensure 'EdgeNotInDatabase' flag is always set (if needed).
-		// Handles case where manually added edge is immediately deleted.
-		//
-		// Issue #399
-		
-		if (!(edge->state & YDB_EdgeState_HasEdgeRowid))
-		{
-			edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
+            if (!(edge->state & YDB_EdgeState_HasEdgeRowid))
+            {
+                edge->flags |= YDB_EdgeFlags_EdgeNotInDatabase;
+            }
 		}
 	}
 }
@@ -3059,8 +3077,6 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 	// So this block need only look at the edgeAction and flags to decide how to process each edge.
 	
 	void (^ProcessEdges)(NSArray *edges) = ^(NSArray *edges){ @autoreleasepool{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		for (YapDatabaseRelationshipEdge *edge in edges)
 		{
@@ -3151,60 +3167,48 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 						
 						edgeProcessed = NO;
 					}
-					else
+					else if (edge->nodeDeleteRules & YDB_DeleteDestinationIfSourceDeleted)
 					{
-						// Edge might have (YDB_NotifyIfSourceDeleted & YDB_DeleteDestinationIfSourceDeleted)
-						// So we need to process separately.
+						// Delete the destination node
 						
-						if (edge->nodeDeleteRules & YDB_NotifyIfSourceDeleted)
+						YDBLogVerbose(@"Deleting destination node: key(%@) collection(%@)",
+						              edge->destinationKey, edge->destinationCollection);
+						
+						__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
+						  (YapDatabaseReadWriteTransaction *)databaseTransaction;
+						
+						[self lookupEdgeDestinationCollectionKey:edge];
+						[databaseRwTransaction removeObjectForKey:edge->destinationKey
+						                             inCollection:edge->destinationCollection
+						                                withRowid:edge->destinationRowid];
+					}
+					else if (edge->nodeDeleteRules & YDB_NotifyIfSourceDeleted)
+					{
+						// Notify the destination node
+						
+						[self lookupEdgeDestinationCollectionKey:edge];
+						id destinationNode = [databaseTransaction objectForKey:edge->destinationKey
+						                                          inCollection:edge->destinationCollection
+						                                             withRowid:edge->destinationRowid];
+						
+						SEL selector = @selector(yapDatabaseRelationshipEdgeDeleted:withReason:);
+						if ([destinationNode respondsToSelector:selector])
 						{
-							// Notify the destination node
-						
-							[self lookupEdgeDestinationCollectionKey:edge];
-							id destinationNode = [databaseTransaction objectForKey:edge->destinationKey
-							                                          inCollection:edge->destinationCollection
-							                                             withRowid:edge->destinationRowid];
-						
-							SEL selector = @selector(yapDatabaseRelationshipEdgeDeleted:withReason:);
-							if ([destinationNode respondsToSelector:selector])
+							id updatedDestinationNode =
+							  [destinationNode yapDatabaseRelationshipEdgeDeleted:edge
+							                                           withReason:YDB_SourceNodeDeleted];
+							
+							if (updatedDestinationNode)
 							{
-								id updatedDestinationNode =
-								  [destinationNode yapDatabaseRelationshipEdgeDeleted:edge
-								                                           withReason:YDB_SourceNodeDeleted];
+								__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
+								  (YapDatabaseReadWriteTransaction *)databaseTransaction;
 								
-								if (edge->nodeDeleteRules & YDB_DeleteDestinationIfSourceDeleted)
-								{
-									// Don't bother writing the updated node to the database,
-									// since we're going to immediately delete it.
-								}
-								else if (updatedDestinationNode)
-								{
-									__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
-									  (YapDatabaseReadWriteTransaction *)databaseTransaction;
-						
-									[databaseRwTransaction replaceObject:updatedDestinationNode
-									                              forKey:edge->destinationKey
-									                        inCollection:edge->destinationCollection
-									                           withRowid:edge->destinationRowid
-									                    serializedObject:nil];
-								}
+								[databaseRwTransaction replaceObject:updatedDestinationNode
+								                              forKey:edge->destinationKey
+								                        inCollection:edge->destinationCollection
+								                           withRowid:edge->destinationRowid
+								                    serializedObject:nil];
 							}
-						}
-						
-						if (edge->nodeDeleteRules & YDB_DeleteDestinationIfSourceDeleted)
-						{
-							// Delete the destination node
-					
-							YDBLogVerbose(@"Deleting destination node: key(%@) collection(%@)",
-							              edge->destinationKey, edge->destinationCollection);
-					
-							__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
-							  (YapDatabaseReadWriteTransaction *)databaseTransaction;
-					
-							[self lookupEdgeDestinationCollectionKey:edge];
-							[databaseRwTransaction removeObjectForKey:edge->destinationKey
-							                             inCollection:edge->destinationCollection
-							                                withRowid:edge->destinationRowid];
 						}
 					}
 				}
@@ -3225,60 +3229,48 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 						
 						edgeProcessed = NO;
 					}
-					else
+					else if (edge->nodeDeleteRules & YDB_DeleteSourceIfDestinationDeleted)
 					{
-						// Edge might have (YDB_NotifyIfDestinationDeleted & YDB_DeleteSourceIfDestinationDeleted)
-						// So we need to process separately.
+						// Delete the source node
 						
-						if (edge->nodeDeleteRules & YDB_NotifyIfDestinationDeleted)
+						YDBLogVerbose(@"Deleting source node: key(%@) collection(%@)",
+						              edge->sourceKey, edge->sourceCollection);
+						
+						__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
+						  (YapDatabaseReadWriteTransaction *)databaseTransaction;
+						
+						[self lookupEdgeSourceCollectionKey:edge];
+						[databaseRwTransaction removeObjectForKey:edge->sourceKey
+						                             inCollection:edge->sourceCollection
+						                                withRowid:edge->sourceRowid];
+					}
+					else if (edge->nodeDeleteRules & YDB_NotifyIfDestinationDeleted)
+					{
+						// Notify the source node
+						
+						[self lookupEdgeSourceCollectionKey:edge];
+						id sourceNode = [databaseTransaction objectForKey:edge->sourceKey
+						                                     inCollection:edge->sourceCollection
+						                                        withRowid:edge->sourceRowid];
+						
+						SEL selector = @selector(yapDatabaseRelationshipEdgeDeleted:withReason:);
+						if ([sourceNode respondsToSelector:selector])
 						{
-							// Notify the source node
-					
-							[self lookupEdgeSourceCollectionKey:edge];
-							id sourceNode = [databaseTransaction objectForKey:edge->sourceKey
-							                                     inCollection:edge->sourceCollection
-							                                        withRowid:edge->sourceRowid];
-					
-							SEL selector = @selector(yapDatabaseRelationshipEdgeDeleted:withReason:);
-							if ([sourceNode respondsToSelector:selector])
+							id updatedSourceNode =
+							  [sourceNode yapDatabaseRelationshipEdgeDeleted:edge
+							                                      withReason:YDB_DestinationNodeDeleted];
+							
+							if (updatedSourceNode)
 							{
-								id updatedSourceNode =
-								  [sourceNode yapDatabaseRelationshipEdgeDeleted:edge
-								                                      withReason:YDB_DestinationNodeDeleted];
-					
-								if (edge->nodeDeleteRules & YDB_DeleteSourceIfDestinationDeleted)
-								{
-									// Don't bother writing the updated node to the database,
-									// since we're going to immediately delete it.
-								}
-								else if (updatedSourceNode)
-								{
-									__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
-									  (YapDatabaseReadWriteTransaction *)databaseTransaction;
-					
-									[databaseRwTransaction replaceObject:updatedSourceNode
-									                              forKey:edge->sourceKey
-									                        inCollection:edge->sourceCollection
-									                           withRowid:edge->sourceRowid
-									                    serializedObject:nil];
-								}
+								__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
+								  (YapDatabaseReadWriteTransaction *)databaseTransaction;
+								
+								[databaseRwTransaction replaceObject:updatedSourceNode
+								                              forKey:edge->sourceKey
+								                        inCollection:edge->sourceCollection
+								                           withRowid:edge->sourceRowid
+								                    serializedObject:nil];
 							}
-						}
-						
-						if (edge->nodeDeleteRules & YDB_DeleteSourceIfDestinationDeleted)
-						{
-							// Delete the source node
-				
-							YDBLogVerbose(@"Deleting source node: key(%@) collection(%@)",
-							              edge->sourceKey, edge->sourceCollection);
-				
-							__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
-							  (YapDatabaseReadWriteTransaction *)databaseTransaction;
-				
-							[self lookupEdgeSourceCollectionKey:edge];
-							[databaseRwTransaction removeObjectForKey:edge->sourceKey
-							                             inCollection:edge->sourceCollection
-							                                withRowid:edge->sourceRowid];
 						}
 					}
 				}
@@ -3315,7 +3307,6 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 			
 		} // end for (YapDatabaseRelationshipEdge *edge in edges)
 		
-	#pragma clang diagnostic pop
 	}}; // end block ProcessEdges(NSMutableArray *edges)
 	
 	
@@ -3329,8 +3320,6 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 	// - deleting edges that were manually removed from the list
 	
 	[parentConnection->protocolChanges enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL __unused *stop){
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		__unsafe_unretained NSNumber *srcRowidNumber = (NSNumber *)key;
 		__unsafe_unretained NSMutableArray *protocolEdges = (NSMutableArray *)obj;
@@ -3360,8 +3349,6 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 		// We're ready for normal edge processing.
 		
 		ProcessEdges(protocolEdges);
-		
-	#pragma clang diagnostic pop
 	}];
 	
 	[parentConnection->protocolChanges removeAllObjects];
@@ -3403,9 +3390,10 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 		{
 			if (edge->nodeDeleteRules & YDB_DeleteDestinationIfAllSourcesDeleted)
 			{
-				// Delete destination file IF there are no other edges pointing to it
+				// Delete destination node IF there are no other edges pointing to it with the same name
 				
 				int64_t count = [self edgeCountWithDestinationFileURL:edge->destinationFileURL
+				                                                 name:edge->name
 				                                      excludingSource:edge->sourceRowid];
 				if (count == 0)
 				{
@@ -3427,38 +3415,18 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 				}
 				else
 				{
-					// Delete destination node IF there are no other edges pointing to it
+					// Delete destination node IF there are no other edges pointing to it with the same name
 					
 					int64_t count = [self edgeCountWithDestination:edge->destinationRowid
+					                                          name:edge->name
 					                               excludingSource:edge->sourceRowid];
 					if (count == 0)
 					{
-						// Delete destination node
+						YDBLogVerbose(@"Deleting destination node: key(%@) collection(%@)",
+						              edge->destinationKey, edge->destinationCollection);
 						
 						__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
 						  (YapDatabaseReadWriteTransaction *)databaseTransaction;
-						
-						// Edge might have (YDB_NotifyIfSourceDeleted & YDB_DeleteDestinationIfAllSourcesDeleted)
-						
-						if (edge->nodeDeleteRules & YDB_NotifyIfSourceDeleted)
-						{
-							// Notify the destination node
-						
-							[self lookupEdgeDestinationCollectionKey:edge];
-							id destinationNode = [databaseTransaction objectForKey:edge->destinationKey
-							                                          inCollection:edge->destinationCollection
-							                                             withRowid:edge->destinationRowid];
-						
-							SEL selector = @selector(yapDatabaseRelationshipEdgeDeleted:withReason:);
-							if ([destinationNode respondsToSelector:selector])
-							{
-								(void)[destinationNode yapDatabaseRelationshipEdgeDeleted:edge
-								                                               withReason:YDB_SourceNodeDeleted];
-							}
-						}
-						
-						YDBLogVerbose(@"Deleting destination node: key(%@) collection(%@)",
-						              edge->destinationKey, edge->destinationCollection);
 						
 						[self lookupEdgeDestinationCollectionKey:edge];
 						[databaseRwTransaction removeObjectForKey:edge->destinationKey
@@ -3475,39 +3443,18 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 				}
 				else
 				{
-					// Delete source node IF there are no other edges pointing from it
+					// Delete source node IF there are no other edges pointing from it with the same name
 					
 					int64_t count = [self edgeCountWithSource:edge->sourceRowid
+					                                     name:edge->name
 					                     excludingDestination:edge->destinationRowid];
 					if (count == 0)
 					{
-						// Delete source node
+						YDBLogVerbose(@"Deleting source node: key(%@) collection(%@)",
+						              edge->sourceKey, edge->sourceCollection);
 						
 						__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
 						  (YapDatabaseReadWriteTransaction *)databaseTransaction;
-						
-						// Edge might have (YDB_NotifyIfDestinationDeleted & YDB_DeleteSourceIfAllDestinationsDeleted)
-						// So we need to process separately.
-						
-						if (edge->nodeDeleteRules & YDB_NotifyIfDestinationDeleted)
-						{
-							// Notify the source node
-					
-							[self lookupEdgeSourceCollectionKey:edge];
-							id sourceNode = [databaseTransaction objectForKey:edge->sourceKey
-							                                     inCollection:edge->sourceCollection
-							                                        withRowid:edge->sourceRowid];
-					
-							SEL selector = @selector(yapDatabaseRelationshipEdgeDeleted:withReason:);
-							if ([sourceNode respondsToSelector:selector])
-							{
-								(void)[sourceNode yapDatabaseRelationshipEdgeDeleted:edge
-								                                          withReason:YDB_DestinationNodeDeleted];
-							}
-						}
-						
-						YDBLogVerbose(@"Deleting source node: key(%@) collection(%@)",
-						              edge->sourceKey, edge->sourceCollection);
 						
 						[self lookupEdgeSourceCollectionKey:edge];
 						[databaseRwTransaction removeObjectForKey:edge->sourceKey
@@ -3545,8 +3492,6 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 			YapCollectionKey *src = deletedCollectionKey;
 			
 			[self enumerateExistingEdgesWithSource:srcRowid usingBlock:^(YapDatabaseRelationshipEdge *edge) {
-			#pragma clang diagnostic push
-			#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 				
 				// Reminder:
 				//
@@ -3562,7 +3507,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 				{
 					if (edge->nodeDeleteRules & YDB_DeleteDestinationIfAllSourcesDeleted)
 					{
-						// Delete the destination file IF there are no other edges pointing to it
+						// Delete the destination node IF there are no other edges pointing to it with the same name
 						
 						if (!(edge->state & YDB_EdgeState_HasDestinationFileURL))
 						{
@@ -3572,6 +3517,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 						if (edge->destinationFileURL)
 						{
 							int64_t count = [self edgeCountWithDestinationFileURL:edge->destinationFileURL
+							                                                 name:edge->name
 							                                      excludingSource:srcRowid];
 							if (count == 0)
 							{
@@ -3603,27 +3549,69 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 					}
 					else
 					{
-						BOOL shouldDeleteDestination = NO;
-						
 						if (edge->nodeDeleteRules & YDB_DeleteDestinationIfAllSourcesDeleted)
 						{
-							// Delete the destination node IF there are no other edges pointing to it
+							// Delete the destination node IF there are no other edges pointing to it with the same name
 							
 							int64_t count = [self edgeCountWithDestination:edge->destinationRowid
-                                                           excludingSource:srcRowid];
+							                                          name:edge->name
+							                               excludingSource:srcRowid];
 							if (count == 0)
 							{
-								shouldDeleteDestination = YES;
+								YapCollectionKey *dst = nil;
+								
+								if (edge->destinationKey == nil)
+								{
+									dst = [databaseTransaction collectionKeyForRowid:edge->destinationRowid];
+									
+									edge->destinationKey = dst.key;
+									edge->destinationCollection = dst.collection;
+								}
+								
+								YDBLogVerbose(@"Deleting destination node: key(%@) collection(%@)",
+								              edge->destinationKey, edge->destinationCollection);
+								
+								__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
+								  (YapDatabaseReadWriteTransaction *)databaseTransaction;
+								
+								if (dst)
+									[databaseRwTransaction removeObjectForCollectionKey:dst
+									                                          withRowid:edge->destinationRowid];
+								else
+									[databaseRwTransaction removeObjectForKey:edge->destinationKey
+									                             inCollection:edge->destinationCollection
+									                                withRowid:edge->destinationRowid];
 							}
 						}
 						else if (edge->nodeDeleteRules & YDB_DeleteDestinationIfSourceDeleted)
 						{
-							shouldDeleteDestination = YES;
+							// Delete the destination node
+							
+							YapCollectionKey *dst = nil;
+							
+							if (edge->destinationKey == nil)
+							{
+								dst = [databaseTransaction collectionKeyForRowid:edge->destinationRowid];
+								
+								edge->destinationKey = dst.key;
+								edge->destinationCollection = dst.collection;
+							}
+							
+							YDBLogVerbose(@"Deleting destination node: key(%@) collection(%@)",
+							              edge->destinationKey, edge->destinationCollection);
+							
+							__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
+							  (YapDatabaseReadWriteTransaction *)databaseTransaction;
+							
+							if (dst)
+								[databaseRwTransaction removeObjectForCollectionKey:dst
+								                                          withRowid:edge->destinationRowid];
+							else
+								[databaseRwTransaction removeObjectForKey:edge->destinationKey
+								                             inCollection:edge->destinationCollection
+								                                withRowid:edge->destinationRowid];
 						}
-						
-						// Note: YDB_NotifyIfSourceDeleted may be set in addition to the delete rules.
-						
-						if (edge->nodeDeleteRules & YDB_NotifyIfSourceDeleted)
+						else if (edge->nodeDeleteRules & YDB_NotifyIfSourceDeleted)
 						{
 							// Notify the destination node
 							
@@ -3659,12 +3647,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 								id updatedDstNode =
 								  [dstNode yapDatabaseRelationshipEdgeDeleted:edge withReason:YDB_SourceNodeDeleted];
 								
-								if (shouldDeleteDestination)
-								{
-									// Don't bother writing the updated node to the database,
-									// since we're going to immediately delete it.
-								}
-								else if (updatedDstNode)
+								if (updatedDstNode)
 								{
 									__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
 									  (YapDatabaseReadWriteTransaction *)databaseTransaction;
@@ -3677,39 +3660,8 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 								}
 							}
 						}
-						
-						if (shouldDeleteDestination)
-						{
-							// Delete the destination node
-							
-							YapCollectionKey *dst = nil;
-							
-							if (edge->destinationKey == nil)
-							{
-								dst = [databaseTransaction collectionKeyForRowid:edge->destinationRowid];
-								
-								edge->destinationKey = dst.key;
-								edge->destinationCollection = dst.collection;
-							}
-							
-							YDBLogVerbose(@"Deleting destination node: key(%@) collection(%@)",
-							              edge->destinationKey, edge->destinationCollection);
-							
-							__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
-							  (YapDatabaseReadWriteTransaction *)databaseTransaction;
-							
-							if (dst)
-								[databaseRwTransaction removeObjectForCollectionKey:dst
-								                                          withRowid:edge->destinationRowid];
-							else
-								[databaseRwTransaction removeObjectForKey:edge->destinationKey
-								                             inCollection:edge->destinationCollection
-								                                withRowid:edge->destinationRowid];
-						}
 					}
 				} // end else if (!dstFilePath)
-				
-			#pragma clang diagnostic pop
 			}]; // end enumerateExistingRowsWithSrc:usingBlock:
 		
 		} // end "Enumerate all edges where source node is the deleted node"
@@ -3721,8 +3673,6 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 			YapCollectionKey *dst = deletedCollectionKey;
 			
 			[self enumerateExistingEdgesWithDestination:dstRowid usingBlock:^(YapDatabaseRelationshipEdge *edge) {
-			#pragma clang diagnostic push
-			#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 				
 				// Reminder:
 				//
@@ -3740,27 +3690,69 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 				}
 				else
 				{
-					BOOL shouldDeleteSource = NO;
-					
 					if (edge->nodeDeleteRules & YDB_DeleteSourceIfAllDestinationsDeleted)
 					{
-						// Delete the source node IF there are no other edges pointing from it
+						// Delete the source node IF there are no other edges pointing from it with the same name
 						
 						int64_t count = [self edgeCountWithSource:edge->sourceRowid
-                                             excludingDestination:dstRowid];
+						                                     name:edge->name
+						                     excludingDestination:dstRowid];
 						if (count == 0)
 						{
-							shouldDeleteSource = YES;
+							YapCollectionKey *src = nil;
+							
+							if (edge->sourceKey == nil)
+							{
+								src = [databaseTransaction collectionKeyForRowid:edge->sourceRowid];
+								
+								edge->sourceKey = src.key;
+								edge->sourceCollection = src.collection;
+							}
+							
+							YDBLogVerbose(@"Deleting source node: key(%@) collection(%@)",
+							              edge->sourceKey, edge->sourceCollection);
+							
+							__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
+							  (YapDatabaseReadWriteTransaction *)databaseTransaction;
+							
+							if (src)
+								[databaseRwTransaction removeObjectForCollectionKey:src
+								                                          withRowid:edge->sourceRowid];
+							else
+								[databaseRwTransaction removeObjectForKey:edge->sourceKey
+								                             inCollection:edge->sourceCollection
+								                                withRowid:edge->sourceRowid];
 						}
 					}
 					else if (edge->nodeDeleteRules & YDB_DeleteSourceIfDestinationDeleted)
 					{
-						shouldDeleteSource = YES;
+						// Delete the source node
+						
+						YapCollectionKey *src = nil;
+						
+						if (edge->sourceKey == nil)
+						{
+							src = [databaseTransaction collectionKeyForRowid:edge->sourceRowid];
+							
+							edge->sourceKey = src.key;
+							edge->sourceCollection = src.collection;
+						}
+						
+						YDBLogVerbose(@"Deleting source node: key(%@) collection(%@)",
+						              edge->sourceKey, edge->sourceCollection);
+						
+						__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
+						  (YapDatabaseReadWriteTransaction *)databaseTransaction;
+						
+						if (src)
+							[databaseRwTransaction removeObjectForCollectionKey:src
+							                                          withRowid:edge->sourceRowid];
+						else
+							[databaseRwTransaction removeObjectForKey:edge->sourceKey
+							                             inCollection:edge->sourceCollection
+							                                withRowid:edge->sourceRowid];
 					}
-					
-					// Note: YDB_NotifyIfDestinationDeleted may be set in addition to the delete rules.
-					
-					if (edge->nodeDeleteRules & YDB_NotifyIfDestinationDeleted)
+					else if (edge->nodeDeleteRules & YDB_NotifyIfDestinationDeleted)
 					{
 						// Notify the source node
 						
@@ -3795,12 +3787,7 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 							id updatedSrcNode =
 							  [srcNode yapDatabaseRelationshipEdgeDeleted:edge withReason:YDB_DestinationNodeDeleted];
 							
-							if (shouldDeleteSource)
-							{
-								// Don't bother writing the updated node to the database,
-								// since we're going to immediately delete it.
-							}
-							else if (updatedSrcNode)
+							if (updatedSrcNode)
 							{
 								__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
 								  (YapDatabaseReadWriteTransaction *)databaseTransaction;
@@ -3813,38 +3800,8 @@ NS_INLINE BOOL URLMatchesURL(NSURL *url1, NSURL *url2)
 							}
 						}
 					}
-					
-					if (shouldDeleteSource)
-					{
-						// Delete the source node
-						
-						YapCollectionKey *src = nil;
-						
-						if (edge->sourceKey == nil)
-						{
-							src = [databaseTransaction collectionKeyForRowid:edge->sourceRowid];
-							
-							edge->sourceKey = src.key;
-							edge->sourceCollection = src.collection;
-						}
-						
-						YDBLogVerbose(@"Deleting source node: key(%@) collection(%@)",
-						              edge->sourceKey, edge->sourceCollection);
-						
-						__unsafe_unretained YapDatabaseReadWriteTransaction *databaseRwTransaction =
-						  (YapDatabaseReadWriteTransaction *)databaseTransaction;
-						
-						if (src)
-							[databaseRwTransaction removeObjectForCollectionKey:src
-							                                          withRowid:edge->sourceRowid];
-						else
-							[databaseRwTransaction removeObjectForKey:edge->sourceKey
-							                             inCollection:edge->sourceCollection
-							                                withRowid:edge->sourceRowid];
-					}
 				}
-			
-			#pragma clang diagnostic pop
+				
 			}]; // end enumerateExistingRowsWithDst:usingBlock:
 		
 		} // end "Enumerate all edges where destination node is the deleted node"

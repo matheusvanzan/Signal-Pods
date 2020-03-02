@@ -14,7 +14,6 @@
 @property (nonatomic, readonly) BOOL wasAcceptedByService;
 
 - (instancetype)initWithId:(int)identifier keyPair:(ECKeyPair *)keyPair signature:(NSData*)signature generatedAt:(NSDate*)generatedAt;
-- (instancetype)initWithId:(int)identifier keyPair:(ECKeyPair *)keyPair NS_UNAVAILABLE;
 
 - (void)markAsAcceptedByService;
 

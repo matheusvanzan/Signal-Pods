@@ -1,10 +1,12 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  HKDFKit.h
+//  HKDFKit
+//
+//  Created by Frederic Jacobs on 29/03/14.
+//  Copyright (c) 2014 Frederic Jacobs. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>
-
-NS_ASSUME_NONNULL_BEGIN
 
 @interface HKDFKit : NSObject
 
@@ -18,15 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
  *
  *  @return The derived key material
  */
-+ (NSData *)throws_deriveKey:(NSData *)seed
-                        info:(nullable NSData *)info
-                        salt:(NSData *)salt
-                  outputSize:(int)outputSize NS_SWIFT_UNAVAILABLE("throws objc exceptions");
-+ (nullable NSData *)deriveKey:(NSData *)seed
-                          info:(nullable NSData *)info
-                          salt:(NSData *)salt
-                    outputSize:(int)outputSize
-                         error:(NSError **)outError;
+
++ (NSData*)deriveKey:(NSData*)seed info:(NSData*)info salt:(NSData*)salt outputSize:(int)outputSize;
 
 /**
  *  TextSecure v2 HKDF implementation
@@ -38,11 +33,8 @@ NS_ASSUME_NONNULL_BEGIN
  *
  *  @return The derived key material
  */
-+ (NSData *)throws_TextSecureV2deriveKey:(NSData *)seed
-                                    info:(nullable NSData *)info
-                                    salt:(NSData *)salt
-                              outputSize:(int)outputSize NS_SWIFT_UNAVAILABLE("throws objc exceptions");
+
++ (NSData*)TextSecureV2deriveKey:(NSData*)seed info:(NSData*)info salt:(NSData*)salt outputSize:(int)outputSize;
+
 
 @end
-
-NS_ASSUME_NONNULL_END

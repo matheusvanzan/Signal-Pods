@@ -1,8 +1,6 @@
 #import <Foundation/Foundation.h>
 #import "YapDatabaseExtensionTypes.h"
 
-@class YapDatabaseReadTransaction;
-
 NS_ASSUME_NONNULL_BEGIN
 
 /**
@@ -24,16 +22,16 @@ NS_ASSUME_NONNULL_BEGIN
 typedef id YapDatabaseFullTextSearchBlock; // One of YapDatabaseFullTextSearchXBlock types
 
 typedef void (^YapDatabaseFullTextSearchWithKeyBlock)
-                            (YapDatabaseReadTransaction *transaction, NSMutableDictionary *dict, NSString *collection, NSString *key);
+                            (NSMutableDictionary *dict, NSString *collection, NSString *key);
 
 typedef void (^YapDatabaseFullTextSearchWithObjectBlock)
-                            (YapDatabaseReadTransaction *transaction, NSMutableDictionary *dict, NSString *collection, NSString *key, id object);
+                            (NSMutableDictionary *dict, NSString *collection, NSString *key, id object);
 
 typedef void (^YapDatabaseFullTextSearchWithMetadataBlock)
-                            (YapDatabaseReadTransaction *transaction, NSMutableDictionary *dict, NSString *collection, NSString *key, __nullable id metadata);
+                            (NSMutableDictionary *dict, NSString *collection, NSString *key, __nullable id metadata);
 
 typedef void (^YapDatabaseFullTextSearchWithRowBlock)
-                            (YapDatabaseReadTransaction *transaction, NSMutableDictionary *dict, NSString *collection, NSString *key, id object, __nullable id metadata);
+                            (NSMutableDictionary *dict, NSString *collection, NSString *key, id object, __nullable id metadata);
 
 + (instancetype)withKeyBlock:(YapDatabaseFullTextSearchWithKeyBlock)block;
 + (instancetype)withObjectBlock:(YapDatabaseFullTextSearchWithObjectBlock)block;

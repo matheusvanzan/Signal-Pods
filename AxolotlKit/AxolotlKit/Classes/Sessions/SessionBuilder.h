@@ -1,5 +1,5 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
 #import "AxolotlStore.h"
@@ -9,8 +9,6 @@
 #import "SessionStore.h"
 #import "SignedPreKeyStore.h"
 #import <Foundation/Foundation.h>
-
-NS_ASSUME_NONNULL_BEGIN
 
 @class PreKeyWhisperMessage;
 
@@ -29,16 +27,8 @@ extern const int kPreKeyOfLastResortId;
                          recipientId:(NSString *)recipientId
                             deviceId:(int)deviceId;
 
-- (void)throws_processPrekeyBundle:(PreKeyBundle *)preKeyBundle
-                   protocolContext:(nullable id)protocolContext NS_SWIFT_UNAVAILABLE("throws objc exceptions");
-- (BOOL)processPrekeyBundle:(PreKeyBundle *)preKeyBundle
-            protocolContext:(nullable id)protocolContext
-                      error:(NSError **)outError;
-
-- (int)throws_processPrekeyWhisperMessage:(PreKeyWhisperMessage *)message
-                              withSession:(SessionRecord *)sessionRecord
-                          protocolContext:(nullable id)protocolContext NS_SWIFT_UNAVAILABLE("throws objc exceptions");
+- (void)processPrekeyBundle:(PreKeyBundle *)preKeyBundle;
+- (int)processPrekeyWhisperMessage:(PreKeyWhisperMessage *)message
+                       withSession:(SessionRecord *)sessionRecord;
 
 @end
-
-NS_ASSUME_NONNULL_END

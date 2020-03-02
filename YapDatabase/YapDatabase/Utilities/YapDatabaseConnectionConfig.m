@@ -43,66 +43,44 @@ static NSUInteger const DEFAULT_METADATA_CACHE_LIMIT = 250;
 {
 	YapDatabaseConnectionConfig *copy = [[[self class] alloc] init];
 	
-	copy->objectCacheEnabled = self.objectCacheEnabled;
-	copy->objectCacheLimit = self.objectCacheLimit;
+	copy->objectCacheEnabled = objectCacheEnabled;
+	copy->objectCacheLimit = objectCacheLimit;
 	
-	copy->metadataCacheEnabled = self.metadataCacheEnabled;
-	copy->metadataCacheLimit = self.metadataCacheLimit;
+	copy->metadataCacheEnabled = metadataCacheEnabled;
+	copy->metadataCacheLimit = metadataCacheLimit;
 	
-	copy->objectPolicy = self.objectPolicy;
-	copy->metadataPolicy = self.metadataPolicy;
+	copy->objectPolicy = objectPolicy;
+	copy->metadataPolicy = metadataPolicy;
 	
 	#if TARGET_OS_IOS || TARGET_OS_TV
-	copy->autoFlushMemoryFlags = self.autoFlushMemoryFlags;
+	copy->autoFlushMemoryFlags = autoFlushMemoryFlags;
 	#endif
 	
 	return copy;
 }
 
-- (BOOL)validateObjectPolicy:(id *)ioValue error:(NSError * __autoreleasing *)outError
+- (void)setObjectPolicy:(YapDatabasePolicy)newObjectPolicy
 {
-	const YapDatabasePolicy defaultPolicy = YapDatabasePolicyContainment;
-	
-	if (*ioValue == nil)
+	// sanity check
+	switch (newObjectPolicy)
 	{
-		*ioValue = @(defaultPolicy);
+		case YapDatabasePolicyContainment :
+		case YapDatabasePolicyShare       :
+		case YapDatabasePolicyCopy        : objectPolicy = newObjectPolicy; break;
+		default                           : objectPolicy = YapDatabasePolicyContainment; // revert to default
 	}
-	else
-	{
-		YapDatabasePolicy policy = (YapDatabasePolicy)[*ioValue integerValue];
-		switch (policy)
-		{
-			case YapDatabasePolicyContainment :
-			case YapDatabasePolicyShare       :
-			case YapDatabasePolicyCopy        : break;
-			default                           : *ioValue = @(defaultPolicy);
-		}
-	}
-	
-	return YES;
 }
 
-- (BOOL)validateMetadataPolicy:(id *)ioValue error:(NSError * __autoreleasing *)outError
+- (void)setMetadataPolicy:(YapDatabasePolicy)newMetadataPolicy
 {
-	const YapDatabasePolicy defaultPolicy = YapDatabasePolicyContainment;
-	
-	if (*ioValue == nil)
+	// sanity check
+	switch (newMetadataPolicy)
 	{
-		*ioValue = @(defaultPolicy);
+		case YapDatabasePolicyContainment :
+		case YapDatabasePolicyShare       :
+		case YapDatabasePolicyCopy        : metadataPolicy = newMetadataPolicy; break;
+		default                           : metadataPolicy = YapDatabasePolicyContainment; // revert to default
 	}
-	else
-	{
-		YapDatabasePolicy policy = (YapDatabasePolicy)[*ioValue integerValue];
-		switch (policy)
-		{
-			case YapDatabasePolicyContainment :
-			case YapDatabasePolicyShare       :
-			case YapDatabasePolicyCopy        : break;
-			default                           : *ioValue = @(defaultPolicy);
-		}
-	}
-	
-	return YES;
 }
 
 @end

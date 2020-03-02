@@ -8,6 +8,7 @@
 @interface SessionRecord : NSObject <NSSecureCoding>
 
 - (instancetype)init;
+- (instancetype)initWithSessionState:(SessionState*)sessionState;
 
 - (BOOL)hasSessionState:(int)version baseKey:(NSData*)aliceBaseKey;
 - (SessionState*)sessionState;

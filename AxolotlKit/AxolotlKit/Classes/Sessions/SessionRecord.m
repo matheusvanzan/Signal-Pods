@@ -53,6 +53,17 @@
     return self;
 }
 
+
+- (instancetype)initWithSessionState:(SessionState *)sessionState{
+    assert(sessionState);
+    self = [self init];
+    
+    self.sessionState = sessionState;
+    self.fresh = false;
+    
+    return self;
+}
+
 - (BOOL)hasSessionState:(int)version baseKey:(NSData *)aliceBaseKey{
     if (self.sessionState.version == version && [aliceBaseKey isEqualToData:self.sessionState.aliceBaseKey]) {
         return YES;
@@ -99,10 +110,7 @@
     self.sessionState = promotedState;
     
     if (self.previousStates.count > ARCHIVED_STATES_MAX_LENGTH) {
-        NSUInteger deleteCount;
-        ows_sub_overflow(self.previousStates.count, ARCHIVED_STATES_MAX_LENGTH, &deleteCount);
-        NSIndexSet *indexesToDelete =
-            [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(ARCHIVED_STATES_MAX_LENGTH, deleteCount)];
+        NSIndexSet *indexesToDelete = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(ARCHIVED_STATES_MAX_LENGTH, self.previousStates.count - ARCHIVED_STATES_MAX_LENGTH)];
         [self.previousSessionStates removeObjectsAtIndexes:indexesToDelete];
     }
 }

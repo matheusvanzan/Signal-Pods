@@ -20,34 +20,17 @@ static NSString* const kCoderPKBsignedPreKeySignature = @"kCoderPKBsignedPreKeyS
 
 @implementation PreKeyBundle
 
-- (nullable instancetype)initWithRegistrationId:(int)registrationId
-                                       deviceId:(int)deviceId
-                                       preKeyId:(int)preKeyId
-                                   preKeyPublic:(NSData *)preKeyPublic
-                             signedPreKeyPublic:(NSData *)signedPreKeyPublic
-                                 signedPreKeyId:(int)signedPreKeyId
-                          signedPreKeySignature:(NSData *)signedPreKeySignature
-                                    identityKey:(NSData *)identityKey
-{
-    if (preKeyPublic && preKeyPublic.length != 33) {
-        OWSFailDebug(@"preKeyPublic && preKeyPublic.length != 33");
-        return nil;
-    }
-    if (signedPreKeyPublic.length != 33) {
-        OWSFailDebug(@"signedPreKeyPublic.length != 33");
-        return nil;
-    }
-    if (!signedPreKeySignature) {
-        OWSFailDebug(@"!signedPreKeySignature");
-        return nil;
-    }
-    if (identityKey.length != 33) {
-        OWSFailDebug(@"identityKey.length != 33");
-        return nil;
-    }
-
+- (instancetype)initWithRegistrationId:(int)registrationId
+                              deviceId:(int)deviceId
+                              preKeyId:(int)preKeyId
+                          preKeyPublic:(NSData*)preKeyPublic
+                    signedPreKeyPublic:(NSData*)signedPreKeyPublic
+                        signedPreKeyId:(int)signedPreKeyId
+                 signedPreKeySignature:(NSData*)signedPreKeySignature
+                           identityKey:(NSData*)identityKey{
+    
     self = [super init];
-
+    
     if (self) {
         _identityKey           = identityKey;
         _registrationId        = registrationId;

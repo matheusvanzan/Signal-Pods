@@ -1,5 +1,5 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>
@@ -14,12 +14,10 @@ typedef NS_ENUM(NSInteger, TSMessageDirection) {
     TSMessageDirectionOutgoing
 };
 
-// See a discussion of the protocolContext in SessionCipher.h.
 @protocol IdentityKeyStore <NSObject>
 
-- (nullable ECKeyPair *)identityKeyPair:(nullable id)protocolContext;
-
-- (int)localRegistrationId:(nullable id)protocolContext;
+- (nullable ECKeyPair *)identityKeyPair;
+- (int)localRegistrationId;
 
 /**
  * Record a recipients identity key
@@ -30,9 +28,7 @@ typedef NS_ENUM(NSInteger, TSMessageDirection) {
  * @returns YES if we are replacing an existing known identity key for recipientId.
  *          NO  if there was no previously stored identity key for the recipient.
  */
-- (BOOL)saveRemoteIdentity:(NSData *)identityKey
-               recipientId:(NSString *)recipientId
-           protocolContext:(nullable id)protocolContext;
+- (BOOL)saveRemoteIdentity:(NSData *)identityKey recipientId:(NSString *)recipientId;
 
 /**
  * @param   identityKey key data used to identify the recipient
@@ -45,12 +41,7 @@ typedef NS_ENUM(NSInteger, TSMessageDirection) {
  */
 - (BOOL)isTrustedIdentityKey:(NSData *)identityKey
                  recipientId:(NSString *)recipientId
-                   direction:(TSMessageDirection)direction
-             protocolContext:(nullable id)protocolContext;
-
-- (nullable NSData *)identityKeyForRecipientId:(NSString *)recipientId;
-
-- (nullable NSData *)identityKeyForRecipientId:(NSString *)recipientId protocolContext:(nullable id)protocolContext;
+                   direction:(TSMessageDirection)direction;
 
 @end
 

@@ -124,13 +124,9 @@
 	__block YapDatabaseViewSorting  *mostRecentSorting  = nil;
 	
 	dispatch_block_t block = ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 	
 		mostRecentGrouping = grouping;
 		mostRecentSorting  = sorting;
-		
-	#pragma clang diagnostic pop
 	};
 	
 	__strong YapDatabase *database = self.registeredDatabase;

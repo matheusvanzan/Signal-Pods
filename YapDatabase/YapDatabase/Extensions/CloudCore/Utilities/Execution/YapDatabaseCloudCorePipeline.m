@@ -127,12 +127,8 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block YapDatabaseCloudCore *owner = nil;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		owner = _atomic_owner;
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -148,16 +144,12 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block BOOL wasOwnerSet = NO;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		if (!_atomic_owner && inOwner)
 		{
 			_atomic_owner = inOwner;
 			wasOwnerSet = YES;
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -184,8 +176,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block YapDatabaseCloudCoreOperation *match = nil;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		for (YapDatabaseCloudCoreGraph *graph in graphs)
 		{
@@ -198,8 +188,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 				}
 			}
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -225,8 +213,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block NSMutableArray<NSArray<YapDatabaseCloudCoreOperation *> *> *graphOperations = nil;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		graphOperations = [NSMutableArray arrayWithCapacity:graphs.count];
 		
@@ -234,8 +220,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 		{
 			[graphOperations addObject:graph.operations];
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -266,12 +250,8 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block NSUInteger graphCount = 0;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		graphCount = graphs.count;
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -287,8 +267,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block NSMutableArray<NSArray<YapDatabaseCloudCoreOperation *> *> *graphOperations = nil;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		graphOperations = [NSMutableArray arrayWithCapacity:graphs.count];
 		
@@ -296,8 +274,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 		{
 			[graphOperations addObject:graph.operations];
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -314,16 +290,12 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block uint64_t graphID = 0;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		if (idx <= graphs.count)
 		{
 			found = YES;
 			graphID = graphs[idx].persistentOrder;
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -340,16 +312,12 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block uint64_t nextGraphID = 0;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		YapDatabaseCloudCoreGraph *lastGraph = [graphs lastObject];
 		if (lastGraph)
 		{
 			nextGraphID = lastGraph.persistentOrder + 1;
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -375,13 +343,9 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block id result = nil;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		NSMutableDictionary *opInfo = ephemeralInfo[opUUID];
 		result = opInfo[key];
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -401,8 +365,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	if (uuid == nil) return;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		NSMutableDictionary *opInfo = ephemeralInfo[uuid];
 		if (opInfo)
@@ -421,8 +383,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 			
 			opInfo[key] = object;
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -436,8 +396,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block BOOL allowed = YES;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		NSMutableDictionary *opInfo = ephemeralInfo[uuid];
 		if (opInfo == nil)
@@ -463,8 +421,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 		{
 			opInfo[YDBCloudCore_EphemeralKey_Status] = @(status);
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -487,8 +443,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block NSDate *hold = nil;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		NSMutableDictionary *opInfo = ephemeralInfo[opUUID];
 		if (opInfo)
@@ -497,8 +451,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 			status = opInfo[YDBCloudCore_EphemeralKey_Status];
 			hold   = opInfo[YDBCloudCore_EphemeralKey_Hold];
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -553,16 +505,11 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 {
 	if (opUUID == nil) return;
 	
-	__weak YapDatabaseCloudCorePipeline *weakSelf = self;
-	
 	dispatch_block_t block = ^{ @autoreleasepool {
 		
-		__strong YapDatabaseCloudCorePipeline *strongSelf = weakSelf;
-		if (strongSelf == nil) return;
-		
-		if ([strongSelf _setStatus:YDBCloudOperationStatus_Started forOperationUUID:opUUID])
+		if ([self _setStatus:YDBCloudOperationStatus_Started forOperationUUID:opUUID])
 		{
-			[strongSelf->startedOpUUIDs addObject:opUUID];
+			[startedOpUUIDs addObject:opUUID];
 		}
 	}};
 	
@@ -581,18 +528,13 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 {
 	if (opUUID == nil) return;
 	
-	__weak YapDatabaseCloudCorePipeline *weakSelf = self;
-	
 	dispatch_block_t block = ^{ @autoreleasepool {
 		
-		__strong YapDatabaseCloudCorePipeline *strongSelf = weakSelf;
-		if (strongSelf == nil) return;
-		
-		BOOL changed = [strongSelf _setStatus:YDBCloudOperationStatus_Pending forOperationUUID:opUUID];
+		BOOL changed = [self _setStatus:YDBCloudOperationStatus_Pending forOperationUUID:opUUID];
 		if (changed)
 		{
-			[strongSelf->startedOpUUIDs removeObject:opUUID];
-			[strongSelf startNextOperationIfPossible];
+			[startedOpUUIDs removeObject:opUUID];
+			[self startNextOperationIfPossible];
 		}
 	}};
 	
@@ -613,27 +555,21 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
                                     retryDelay:(NSTimeInterval)delay
 {
 	NSDate *hold = nil;
-	if (delay > 0.0) {
+	if (delay > 0.0)
 		hold = [NSDate dateWithTimeIntervalSinceNow:delay];
-	}
-	
-	__weak YapDatabaseCloudCorePipeline *weakSelf = self;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
 		
-		__strong YapDatabaseCloudCorePipeline *strongSelf = weakSelf;
-		if (strongSelf == nil) return;
-		
-		BOOL changed = [strongSelf _setStatus:YDBCloudOperationStatus_Pending forOperationUUID:opUUID];
+		BOOL changed = [self _setStatus:YDBCloudOperationStatus_Pending forOperationUUID:opUUID];
 		if (changed)
 		{
-			[strongSelf _setEphemeralInfo:hold
-			                       forKey:YDBCloudCore_EphemeralKey_Hold
-			                operationUUID:opUUID];
+			[self _setEphemeralInfo:hold
+			                 forKey:YDBCloudCore_EphemeralKey_Hold
+			          operationUUID:opUUID];
 			
-			[strongSelf->startedOpUUIDs removeObject:opUUID];
-			[strongSelf updateHoldTimer];
-			[strongSelf startNextOperationIfPossible];
+			[startedOpUUIDs removeObject:opUUID];
+			[self updateHoldTimer];
+			[self startNextOperationIfPossible];
 		}
 	}};
 	
@@ -953,12 +889,8 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	__block BOOL status = NO;
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		status = isActive;
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -1050,22 +982,17 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 {
 	YDBLogAutoTrace();
 	
-	__weak YapDatabaseCloudCorePipeline *weakSelf = self;
-	
 	dispatch_block_t block = ^{ @autoreleasepool {
-		
-		__strong YapDatabaseCloudCorePipeline *strongSelf = weakSelf;
-		if (strongSelf == nil) return;
 		
 		for (YapDatabaseCloudCoreGraph *graph in inGraphs)
 		{
 			graph.pipeline = self;
 		}
 		
-		[strongSelf->graphs addObjectsFromArray:inGraphs];
+		[graphs addObjectsFromArray:inGraphs];
 		
-		if (strongSelf->graphs.count > 0) {
-			[strongSelf startNextOperationIfPossible];
+		if (graphs.count > 0) {
+			[self startNextOperationIfPossible];
 		}
 	}};
 	
@@ -1082,8 +1009,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	YDBLogAutoTrace();
 	
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		if (graph)
 		{
@@ -1148,8 +1073,6 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 			// Notify listeners that the operation list in the queue changed.
 			[self postQueueChangedNotification];
 		}
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	if (dispatch_get_specific(IsOnQueueKey))
@@ -1174,19 +1097,14 @@ NSString *const YDBCloudCore_EphemeralKey_Hold     = @"hold";
 	int const flagOn  = 1;
 	
 	BOOL didSetFlagOn = OSAtomicCompareAndSwapInt(flagOff, flagOn, &needsStartNextOperationFlag);
+	
 	if (didSetFlagOn)
 	{
-		__weak YapDatabaseCloudCorePipeline *weakSelf = self;
-		
 		dispatch_async(queue, ^{ @autoreleasepool {
 			
-			__strong YapDatabaseCloudCorePipeline *strongSelf = weakSelf;
-			if (strongSelf)
-			{
-				OSAtomicCompareAndSwapInt(flagOn, flagOff, &strongSelf->needsStartNextOperationFlag);
-				
-				[strongSelf startNextOperationIfPossible];
-			}
+			OSAtomicCompareAndSwapInt(flagOn, flagOff, &needsStartNextOperationFlag);
+			
+			[self startNextOperationIfPossible];
 		}});
 	}
 }

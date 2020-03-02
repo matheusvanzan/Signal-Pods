@@ -45,7 +45,7 @@
     "YapDatabase/SQLCipher": [
 
     ],
-    "Starscream": [
+    "SocketRocket": [
 
     ],
     "libPhoneNumber-iOS": [
@@ -57,27 +57,11 @@
     "SAMKeychain": [
 
     ],
+    "TwistedOakCollapsingFutures": [
+
+    ],
     "Reachability": [
 
-    ],
-    "SwiftProtobuf": [
-
-    ],
-    "SignalCoreKit": [
-
-    ],
-    "SignalMetadataKit": [
-
-    ],
-    "PromiseKit": [
-      "~> 6.0"
     ]
-  },
-  "testspecs": [
-    {
-      "name": "Tests",
-      "test_type": "unit",
-      "source_files": "SignalServiceKit/tests/**/*.{h,m,swift}"
-    }
-  ]
+  }
 }

@@ -279,9 +279,6 @@ static NSString *const ext_key_version_deprecated = @"version";
 **/
 - (BOOL)populate
 {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wimplicit-retain-self"
-	
 	// Remove everything from the database
 	
 	[self removeAllRowids];
@@ -426,8 +423,6 @@ static NSString *const ext_key_version_deprecated = @"version";
 	}
 	
 	return YES;
-	
-#pragma clang diagnostic pop
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1241,7 +1236,7 @@ static NSString *const ext_key_version_deprecated = @"version";
 			return; // from block
 		}
 		
-		YapCollectionKey *ck = [self->databaseTransaction collectionKeyForRowid:rowid];
+		YapCollectionKey *ck = [databaseTransaction collectionKeyForRowid:rowid];
 		
 		block(ck.collection, ck.key, stop);
 	}];
@@ -1263,7 +1258,7 @@ static NSString *const ext_key_version_deprecated = @"version";
 		
 		YapCollectionKey *ck = nil;
 		id metadata = nil;
-		[self->databaseTransaction getCollectionKey:&ck metadata:&metadata forRowid:rowid];
+		[databaseTransaction getCollectionKey:&ck metadata:&metadata forRowid:rowid];
 		
 		block(ck.collection, ck.key, metadata, stop);
 	}];
@@ -1285,7 +1280,7 @@ static NSString *const ext_key_version_deprecated = @"version";
 		
 		YapCollectionKey *ck = nil;
 		id object = nil;
-		[self->databaseTransaction getCollectionKey:&ck object:&object forRowid:rowid];
+		[databaseTransaction getCollectionKey:&ck object:&object forRowid:rowid];
 		
 		block(ck.collection, ck.key, object, stop);
 	}];
@@ -1308,7 +1303,7 @@ static NSString *const ext_key_version_deprecated = @"version";
 		YapCollectionKey *ck = nil;
 		id object = nil;
 		id metadata = nil;
-		[self->databaseTransaction getCollectionKey:&ck object:&object metadata:&metadata forRowid:rowid];
+		[databaseTransaction getCollectionKey:&ck object:&object metadata:&metadata forRowid:rowid];
 		
 		block(ck.collection, ck.key, object, metadata, stop);
 	}];

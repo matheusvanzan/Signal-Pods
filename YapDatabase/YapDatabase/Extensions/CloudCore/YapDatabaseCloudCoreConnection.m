@@ -142,13 +142,17 @@
 {
 	YDBLogAutoTrace();
 	
-	// Subclasses should override this method,
-	// and return an instance of their own subclass.
+	NSAssert(NO, @"Missing required method(%@) in subclass(%@)", NSStringFromSelector(_cmd), [self class]);
+	return nil;
 	
-	YapDatabaseCloudCoreTransaction *extTransaction =
-	  [[YapDatabaseCloudCoreTransaction alloc] initWithParentConnection:self databaseTransaction:databaseTransaction];
+/* Subclasses should do something like this:
+ 
+	MYCloudTransaction *transaction =
+	  [[MYCloudTransaction alloc] initWithParentConnection:self
+	                                   databaseTransaction:databaseTransaction];
 	
-	return extTransaction;
+	return transaction;
+*/
 }
 
 /**
@@ -158,14 +162,18 @@
 {
 	YDBLogAutoTrace();
 	
-	// Subclasses should override this method,
-	// and return an instance of their own subclass.
+	NSAssert(NO, @"Missing required method(%@) in subclass(%@)", NSStringFromSelector(_cmd), [self class]);
+	return nil;
 	
-	YapDatabaseCloudCoreTransaction *extTransaction =
-	  [[YapDatabaseCloudCoreTransaction alloc] initWithParentConnection:self databaseTransaction:databaseTransaction];
+/* Subclasses should do something like this:
+ 
+	MYCloudTransaction *transaction =
+	  [[MYCloudTransaction alloc] initWithParentConnection:self
+	                                   databaseTransaction:databaseTransaction];
 	
-	[self prepareForReadWriteTransaction]; // <-- Do NOT forget this step in your subclass !!
-	return extTransaction;
+	[self prepareForReadWriteTransaction]; // <-- Do NOT forget this step !!
+	return transaction;
+*/
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -318,15 +326,11 @@
 	else
 	{
 		[modifiedMappings enumerateWithBlock:^(NSNumber *rowid, NSString *path, id metadata, BOOL *stop) {
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 			
 			if (metadata == YDBCloudCore_DiryMappingMetadata_NeedsRemove)
 			{
 				[cleanMappingCache removeItemWithKey:rowid value:path];
 			}
-			
-		#pragma clang diagnostic pop
 		}];
 	}
 	

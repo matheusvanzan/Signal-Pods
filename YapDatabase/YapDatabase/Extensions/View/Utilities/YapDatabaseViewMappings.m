@@ -445,7 +445,7 @@
 	
 	[newAllGroups sortUsingComparator:^NSComparisonResult(NSString *group1, NSString *group2) {
 		
-		return self->groupSortBlock(group1, group2, transaction);
+		return groupSortBlock(group1, group2, transaction);
 	}];
     
     return [newAllGroups copy];

@@ -1,6 +1,6 @@
 {
   "name": "YapDatabase",
-  "version": "3.1.1",
+  "version": "3.0.2",
   "summary": "A key/value store built atop sqlite for iOS & Mac.",
   "homepage": "https://github.com/yapstudios/YapDatabase",
   "license": "MIT",
@@ -9,10 +9,10 @@
   },
   "source": {
     "git": "https://github.com/yapstudios/YapDatabase.git",
-    "tag": "3.1.1"
+    "tag": "3.0.2"
   },
   "platforms": {
-    "osx": "10.10",
+    "osx": "10.9",
     "ios": "8.0",
     "tvos": "9.0",
     "watchos": "2.0"
@@ -138,10 +138,6 @@
             {
               "name": "ConnectionProxy",
               "source_files": "YapDatabase/Extensions/ConnectionProxy/**/*.{h,m,mm,c}"
-            },
-            {
-              "name": "ConnectionPool",
-              "source_files": "YapDatabase/Extensions/ConnectionPool/**/*.{h,m,mm,c}"
             },
             {
               "name": "ActionManager",
@@ -291,10 +287,6 @@
             {
               "name": "ConnectionProxy",
               "source_files": "YapDatabase/Extensions/ConnectionProxy/**/*.{h,m,mm,c}"
-            },
-            {
-              "name": "ConnectionPool",
-              "source_files": "YapDatabase/Extensions/ConnectionPool/**/*.{h,m,mm,c}"
             },
             {
               "name": "ActionManager",

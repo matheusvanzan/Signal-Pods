@@ -1,17 +1,19 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  RootKey.h
+//  AxolotlKit
+//
+//  Created by Frederic Jacobs on 22/07/14.
+//  Copyright (c) 2014 Frederic Jacobs. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>
-
-@class ECKeyPair;
 @class RKCK;
+@class ECKeyPair;
 
 @interface RootKey : NSObject <NSSecureCoding>
 
 - (instancetype)initWithData:(NSData *)data;
-- (RKCK *)throws_createChainWithTheirEphemeral:(NSData *)theirEphemeral
-                                  ourEphemeral:(ECKeyPair *)ourEphemeral NS_SWIFT_UNAVAILABLE("throws objc exceptions");
+- (RKCK*)createChainWithTheirEphemeral:(NSData*)theirEphemeral ourEphemeral:(ECKeyPair*)ourEphemeral;
 
 @property (nonatomic, readonly) NSData *keyData;
 

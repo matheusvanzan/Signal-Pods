@@ -55,7 +55,6 @@ NSString *const YapDatabaseCustomKey     = @"custom";
 
 NSString *const YapDatabaseObjectChangesKey      = @"objectChanges";
 NSString *const YapDatabaseMetadataChangesKey    = @"metadataChanges";
-NSString *const YapDatabaseInsertedKeysKey       = @"insertedKeys";
 NSString *const YapDatabaseRemovedKeysKey        = @"removedKeys";
 NSString *const YapDatabaseRemovedCollectionsKey = @"removedCollections";
 NSString *const YapDatabaseRemovedRowidsKey      = @"removedRowids";
@@ -280,12 +279,7 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__block NSString *result = nil;
 	
 	dispatch_sync(snapshotQueue, ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
-		
 		result = sqliteVersion;
-		
-	#pragma clang diagnostic pop
 	});
 	
 	return result;
@@ -442,9 +436,7 @@ static int connectionBusyHandler(void *ptr, int count) {
 		__block BOOL isNewDatabaseFile = ![[NSFileManager defaultManager] fileExistsAtPath:databasePath];
 		
 		BOOL(^openConfigCreate)(void) = ^BOOL (void) { @autoreleasepool {
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wimplicit-retain-self"
-			
+		
 			BOOL result = YES;
 			
 			if (result) result = [self openDatabase];
@@ -461,8 +453,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 			}
 			
 			return result;
-			
-		#pragma clang diagnostic pop
 		}};
 		
 		BOOL result = openConfigCreate();
@@ -882,42 +872,37 @@ static int connectionBusyHandler(void *ptr, int count) {
                 return NO;
             }
         }
-
-        BOOL hasCustomCipherConfiguration = NO;
-        if (options.cipherDefaultkdfIterNumber > 0 || options.kdfIterNumber > 0 || options.cipherPageSize) {
-            hasCustomCipherConfiguration = YES;
-
-            //Setting the PBKDF2 default iteration number (this will have effect next time database is opened)
-            if (options.cipherDefaultkdfIterNumber > 0) {
-                char *errorMsg;
-                NSString *pragmaCommand = [NSString stringWithFormat:@"PRAGMA cipher_default_kdf_iter = %lu", (unsigned long)options.cipherDefaultkdfIterNumber];
-                if (sqlite3_exec(sqlite, [pragmaCommand UTF8String], NULL, NULL, &errorMsg) != SQLITE_OK)
-                {
-                    YDBLogError(@"failed to set database cipher_default_kdf_iter: %s", errorMsg);
-                    return NO;
-                }
+        
+        //Setting the PBKDF2 default iteration number (this will have effect next time database is opened)
+        if (options.cipherDefaultkdfIterNumber > 0) {
+            char *errorMsg;
+            NSString *pragmaCommand = [NSString stringWithFormat:@"PRAGMA cipher_default_kdf_iter = %lu", (unsigned long)options.cipherDefaultkdfIterNumber];
+            if (sqlite3_exec(sqlite, [pragmaCommand UTF8String], NULL, NULL, &errorMsg) != SQLITE_OK)
+            {
+                YDBLogError(@"failed to set database cipher_default_kdf_iter: %s", errorMsg);
+                return NO;
             }
-
-            //Setting the PBKDF2 iteration number
-            if (options.kdfIterNumber > 0) {
-                char *errorMsg;
-                NSString *pragmaCommand = [NSString stringWithFormat:@"PRAGMA kdf_iter = %lu", (unsigned long)options.kdfIterNumber];
-                if (sqlite3_exec(sqlite, [pragmaCommand UTF8String], NULL, NULL, &errorMsg) != SQLITE_OK)
-                {
-                    YDBLogError(@"failed to set database kdf_iter: %s", errorMsg);
-                    return NO;
-                }
+        }
+        
+        //Setting the PBKDF2 iteration number
+        if (options.kdfIterNumber > 0) {
+            char *errorMsg;
+            NSString *pragmaCommand = [NSString stringWithFormat:@"PRAGMA kdf_iter = %lu", (unsigned long)options.kdfIterNumber];
+            if (sqlite3_exec(sqlite, [pragmaCommand UTF8String], NULL, NULL, &errorMsg) != SQLITE_OK)
+            {
+                YDBLogError(@"failed to set database kdf_iter: %s", errorMsg);
+                return NO;
             }
-
-            //Setting the encrypted database page size
-            if (options.cipherPageSize > 0) {
-                char *errorMsg;
-                NSString *pragmaCommand = [NSString stringWithFormat:@"PRAGMA cipher_page_size = %lu", (unsigned long)options.cipherPageSize];
-                if (sqlite3_exec(sqlite, [pragmaCommand UTF8String], NULL, NULL, &errorMsg) != SQLITE_OK)
-                {
-                    YDBLogError(@"failed to set database cipher_page_size: %s", errorMsg);
-                    return NO;
-                }
+        }
+        
+        //Setting the encrypted database page size
+        if (options.cipherPageSize > 0) {
+            char *errorMsg;
+            NSString *pragmaCommand = [NSString stringWithFormat:@"PRAGMA cipher_page_size = %lu", (unsigned long)options.cipherPageSize];
+            if (sqlite3_exec(sqlite, [pragmaCommand UTF8String], NULL, NULL, &errorMsg) != SQLITE_OK)
+            {
+                YDBLogError(@"failed to set database cipher_page_size: %s", errorMsg);
+                return NO;
             }
         }
         
@@ -927,7 +912,7 @@ static int connectionBusyHandler(void *ptr, int count) {
             YDBLogError(@"Error setting SQLCipher key: %d %s", status, sqlite3_errmsg(sqlite));
             return NO;
         }
-
+        
         if (options.cipherUnencryptedHeaderLength > 0 &&
             (options.cipherKeySpecBlock ||
              options.cipherSaltBlock)) {
@@ -989,30 +974,7 @@ static int connectionBusyHandler(void *ptr, int count) {
                 return NO;
             }
         }
-
-
-        if (options.legacyCipherCompatibilityVersion > 0) {
-            // `PRAGMA cipher_compatibility` is not available until SQLCipher 4.0.1 which corresponds
-            // to this version of sqlite.
-            // https://www.zetetic.net/blog/2018/12/18/sqlcipher-401-release/
-            const NSUInteger sqlCipherVersionSupportingCipherCompatibility = 3026000;
-            if (SQLITE_VERSION_NUMBER < sqlCipherVersionSupportingCipherCompatibility) {
-                YDBLogWarn(@"setting legacyCipherCompatibilityVersion on unsupported SQLCipher version has no effect.");
-            } else {
-                NSAssert(!hasCustomCipherConfiguration, @"If you are specifying custom cipher parameters, you cannot use legacyCipherCompatibility. Instead you must specify *all* relevant cipher params. Details: https://discuss.zetetic.net/t/upgrading-to-sqlcipher-4/3283");
-                char *errorMsg;
-                NSString *pragmaCommand = [NSString stringWithFormat:@"PRAGMA cipher_compatibility = %lu", (unsigned long)options.legacyCipherCompatibilityVersion];
-
-                if (sqlite3_exec(sqlite, [pragmaCommand UTF8String], NULL, NULL, &errorMsg) != SQLITE_OK) {
-                    YDBLogError(@"failed to set database legacy cipher compatibility version: %s", errorMsg);
-                    return NO;
-                }
-
-                YDBLogVerbose(@"set database legacy cipher compatibility version: %lu", (unsigned long)options.legacyCipherCompatibilityVersion);
-            }
-        }
-    }
-
+	}
 	
 	return YES;
 }
@@ -1033,7 +995,7 @@ static int connectionBusyHandler(void *ptr, int count) {
     return [hexString copy];
 }
 
-#endif // SQLITE_HAS_CODEC
+#endif
 
 /**
  * Creates the database tables we need:
@@ -1663,79 +1625,156 @@ static int connectionBusyHandler(void *ptr, int count) {
 
 - (YapDatabaseConnectionConfig *)connectionDefaults
 {
-	return connectionDefaults;
+	__block YapDatabaseConnectionConfig *result = nil;
+	
+	dispatch_sync(internalQueue, ^{
+		
+		result = [connectionDefaults copy];
+	});
+	
+	return result;
 }
 
 - (BOOL)defaultObjectCacheEnabled
 {
-	return connectionDefaults.objectCacheEnabled;
+	__block BOOL result = NO;
+	
+	dispatch_sync(internalQueue, ^{
+		
+		result = connectionDefaults.objectCacheEnabled;
+	});
+	
+	return result;
 }
 
 - (void)setDefaultObjectCacheEnabled:(BOOL)defaultObjectCacheEnabled
 {
-	connectionDefaults.objectCacheEnabled = defaultObjectCacheEnabled;
+	dispatch_sync(internalQueue, ^{
+		
+		connectionDefaults.objectCacheEnabled = defaultObjectCacheEnabled;
+	});
 }
 
 - (NSUInteger)defaultObjectCacheLimit
 {
-	return connectionDefaults.objectCacheLimit;
+	__block NSUInteger result = NO;
+	
+	dispatch_sync(internalQueue, ^{
+		
+		result = connectionDefaults.objectCacheLimit;
+	});
+	
+	return result;
 }
 
 - (void)setDefaultObjectCacheLimit:(NSUInteger)defaultObjectCacheLimit
 {
-	connectionDefaults.objectCacheLimit = defaultObjectCacheLimit;
+	dispatch_sync(internalQueue, ^{
+		
+		connectionDefaults.objectCacheLimit = defaultObjectCacheLimit;
+	});
 }
 
 - (BOOL)defaultMetadataCacheEnabled
 {
-	return connectionDefaults.metadataCacheEnabled;
+	__block BOOL result = NO;
+	
+	dispatch_sync(internalQueue, ^{
+		
+		result = connectionDefaults.metadataCacheEnabled;
+	});
+	
+	return result;
 }
 
 - (void)setDefaultMetadataCacheEnabled:(BOOL)defaultMetadataCacheEnabled
 {
-	connectionDefaults.metadataCacheEnabled = defaultMetadataCacheEnabled;
+	dispatch_sync(internalQueue, ^{
+		
+		connectionDefaults.metadataCacheEnabled = defaultMetadataCacheEnabled;
+	});
 }
 
 - (NSUInteger)defaultMetadataCacheLimit
 {
-	return connectionDefaults.metadataCacheLimit;
+	__block NSUInteger result = 0;
+	
+	dispatch_sync(internalQueue, ^{
+		
+		result = connectionDefaults.metadataCacheLimit;
+	});
+	
+	return result;
 }
 
 - (void)setDefaultMetadataCacheLimit:(NSUInteger)defaultMetadataCacheLimit
 {
-	connectionDefaults.metadataCacheLimit = defaultMetadataCacheLimit;
+	dispatch_sync(internalQueue, ^{
+		
+		connectionDefaults.metadataCacheLimit = defaultMetadataCacheLimit;
+	});
 }
 
 - (YapDatabasePolicy)defaultObjectPolicy
 {
-	return connectionDefaults.objectPolicy;
+	__block YapDatabasePolicy result = YapDatabasePolicyShare;
+	
+	dispatch_sync(internalQueue, ^{
+		
+		result = connectionDefaults.objectPolicy;
+	});
+	
+	return result;
 }
 
 - (void)setDefaultObjectPolicy:(YapDatabasePolicy)defaultObjectPolicy
 {
-	connectionDefaults.objectPolicy = defaultObjectPolicy;
+	dispatch_sync(internalQueue, ^{
+		
+		connectionDefaults.objectPolicy = defaultObjectPolicy;
+	});
 }
 
 - (YapDatabasePolicy)defaultMetadataPolicy
 {
-	return connectionDefaults.metadataPolicy;
+	__block YapDatabasePolicy result = YapDatabasePolicyShare;
+	
+	dispatch_sync(internalQueue, ^{
+		
+		result = connectionDefaults.metadataPolicy;
+	});
+	
+	return result;
 }
 
 - (void)setDefaultMetadataPolicy:(YapDatabasePolicy)defaultMetadataPolicy
 {
-	connectionDefaults.metadataPolicy = defaultMetadataPolicy;
+	dispatch_sync(internalQueue, ^{
+		
+		connectionDefaults.metadataPolicy = defaultMetadataPolicy;
+	});
 }
 
 #if TARGET_OS_IOS || TARGET_OS_TV
 
 - (YapDatabaseConnectionFlushMemoryFlags)defaultAutoFlushMemoryFlags
 {
-	return connectionDefaults.autoFlushMemoryFlags;
+	__block YapDatabaseConnectionFlushMemoryFlags result = YapDatabaseConnectionFlushMemoryFlags_None;
+	
+	dispatch_sync(internalQueue, ^{
+		
+		result = connectionDefaults.autoFlushMemoryFlags;
+	});
+	
+	return result;
 }
 
 - (void)setDefaultAutoFlushMemoryFlags:(YapDatabaseConnectionFlushMemoryFlags)defaultAutoFlushMemoryFlags
 {
-	connectionDefaults.autoFlushMemoryFlags = defaultAutoFlushMemoryFlags;
+	dispatch_sync(internalQueue, ^{
+		
+		connectionDefaults.autoFlushMemoryFlags = defaultAutoFlushMemoryFlags;
+	});
 }
 
 #endif
@@ -1761,8 +1800,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 	// We'd like to avoid blocking the very next line of code and allow the asynchronous prepare to continue.
 	
 	dispatch_async(connection->connectionQueue, ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		dispatch_sync(snapshotQueue, ^{ @autoreleasepool {
 			
@@ -1780,8 +1817,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 			
 			[connection prepare];
 		}});
-		
-	#pragma clang diagnostic pop
 	});
 }
 
@@ -1791,8 +1826,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 - (void)removeConnection:(YapDatabaseConnection *)connection
 {
 	dispatch_block_t block = ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		NSUInteger index = 0;
 		for (YapDatabaseConnectionState *state in connectionStates)
@@ -1809,8 +1842,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 		YDBLogVerbose(@"Removed connection(%p) from <%@ %p: databaseName=%@, connectionCount=%lu>",
 		              connection, [self class], self, [databasePath lastPathComponent],
 		              (unsigned long)[connectionStates count]);
-		
-	#pragma clang diagnostic pop
 	}};
 	
 	// We prefer to invoke this method synchronously.
@@ -1830,17 +1861,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 - (YapDatabaseConnection *)newConnection
 {
 	YapDatabaseConnection *connection = [[YapDatabaseConnection alloc] initWithDatabase:self];
-	
-	[self addConnection:connection];
-	return connection;
-}
-
-/**
- * This is a public method called to create a new connection.
-**/
-- (YapDatabaseConnection *)newConnection:(YapDatabaseConnectionConfig *)config
-{
-	YapDatabaseConnection *connection = [[YapDatabaseConnection alloc] initWithDatabase:self config:config];
 	
 	[self addConnection:connection];
 	return connection;
@@ -2195,25 +2215,11 @@ static int connectionBusyHandler(void *ptr, int count) {
 		registrationConnection = [self newConnection];
 		registrationConnection.name = @"YapDatabase_extensionRegistrationConnection";
 		
-		// These are the rules (regarding instance retainCount):
-		// - a YapDatabaseConnection instance cannot be deallocated if there are existing/pending transactions
-		// - a YapDatabase instance cannot be deallocated if there are existing connections
-		//
-		// Thus, as long as registrationConnection is non-nil,
-		// 'self' (this YapDatabase instance) cannot be deallocated.
-		//
-		
-		__weak YapDatabase *weakSelf = self;
-		
 		NSTimeInterval delayInSeconds = 5.0;
 		dispatch_time_t popTime = dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delayInSeconds * NSEC_PER_SEC));
 		dispatch_after(popTime, writeQueue, ^(void){
 			
-			__strong YapDatabase *strongSelf = weakSelf;
-			if (strongSelf)
-			{
-				strongSelf->registrationConnection = nil;
-			}
+			registrationConnection = nil;
 		});
 	}
 	
@@ -2335,12 +2341,8 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__block YapDatabaseExtension *result = nil;
 	
 	dispatch_block_t block = ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		result = [registeredExtensions objectForKey:extensionName];
-		
-	#pragma clang diagnostic pop
 	};
 	
 	if (dispatch_get_specific(IsOnSnapshotQueueKey))
@@ -2362,12 +2364,8 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__block NSDictionary *extensionsCopy = nil;
 	
 	dispatch_block_t block = ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		extensionsCopy = registeredExtensions;
-		
-	#pragma clang diagnostic pop
 	};
 	
 	if (dispatch_get_specific(IsOnSnapshotQueueKey))
@@ -2419,12 +2417,8 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__block NSArray *result = nil;
 	
 	dispatch_block_t block = ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		result = [previouslyRegisteredExtensionNames copy];
-		
-	#pragma clang diagnostic pop
 	};
 	
 	if (dispatch_get_specific(IsOnSnapshotQueueKey))
@@ -2433,42 +2427,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 		dispatch_sync(snapshotQueue, block);
 	
 	return result;
-}
-
-/**
- * It's sometimes useful to find out when all async registerExtension/unregisterExtension requests have completed.
- *
- * One way to accomplish this is simply to queue an asyncReadWriteTransaction on any databaseConnection.
- * Since all async register/unregister extension requests are immediately dispatch_async'd through the
- * internal serial writeQueue, you'll know that once your asyncReadWriteTransaction is running,
- * all previously scheduled register/unregister requests have completed.
- *
- * Although the above technique works, the 'flushExtensionRequestsWithCompletionQueue::'
- * is a more efficient way to accomplish this task. (And a more elegant & readable way too.)
- *
- * @param completionQueue
- *   The dispatch_queue to invoke the completionBlock on.
- *   If NULL, dispatch_get_main_queue() is automatically used.
- *
- * @param completionBlock
- *   The block to invoke once all previously scheduled register/unregister extension requests have completed.
- **/
-- (void)flushExtensionRequestsWithCompletionQueue:(nullable dispatch_queue_t)completionQueue
-									       completionBlock:(nullable dispatch_block_t)completionBlock
-{
-	if (completionQueue == NULL && completionBlock != NULL)
-		completionQueue = dispatch_get_main_queue();
-	
-	dispatch_async(writeQueue, ^{ @autoreleasepool {
-		
-		if (completionBlock)
-		{
-			dispatch_async(completionQueue, ^{ @autoreleasepool {
-				
-				completionBlock();
-			}});
-		}
-	}});
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2480,12 +2438,8 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__block NSUInteger count = 0;
 	
 	dispatch_sync(internalQueue, ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		count = maxConnectionPoolCount;
-		
-	#pragma clang diagnostic pop
 	});
 	
 	return count;
@@ -2494,8 +2448,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 - (void)setMaxConnectionPoolCount:(NSUInteger)count
 {
 	dispatch_sync(internalQueue, ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		// Update ivar
 		maxConnectionPoolCount = count;
@@ -2520,8 +2472,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 			
 			[self resetConnectionPoolTimer];
 		}
-		
-	#pragma clang diagnostic pop
 	});
 }
 
@@ -2530,12 +2480,8 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__block NSTimeInterval lifetime = 0;
 	
 	dispatch_sync(internalQueue, ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		lifetime = connectionPoolLifetime;
-		
-	#pragma clang diagnostic pop
 	});
 	
 	return lifetime;
@@ -2544,16 +2490,12 @@ static int connectionBusyHandler(void *ptr, int count) {
 - (void)setConnectionPoolLifetime:(NSTimeInterval)lifetime
 {
 	dispatch_sync(internalQueue, ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		// Update ivar
 		connectionPoolLifetime = lifetime;
 		
 		// Update timer (if needed)
 		[self resetConnectionPoolTimer];
-		
-	#pragma clang diagnostic pop
 	});
 }
 
@@ -2571,8 +2513,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__block BOOL result = NO;
 	
 	dispatch_sync(internalQueue, ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		if ([connectionPoolValues count] < maxConnectionPoolCount)
 		{
@@ -2600,8 +2540,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 				[self resetConnectionPoolTimer];
 			}
 		}
-		
-	#pragma clang diagnostic pop
 	});
 	
 	return result;
@@ -2622,8 +2560,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__block yap_file *wal_file = NULL;
 	
 	dispatch_sync(internalQueue, ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		if ([connectionPoolValues count] > 0)
 		{
@@ -2640,8 +2576,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 			
 			[self resetConnectionPoolTimer];
 		}
-		
-	#pragma clang diagnostic pop
 	});
 	
 	*pDb = aDb;
@@ -2802,12 +2736,7 @@ static int connectionBusyHandler(void *ptr, int count) {
 		__block uint64_t result = 0;
 		
 		dispatch_sync(snapshotQueue, ^{
-		#pragma clang diagnostic push
-		#pragma clang diagnostic ignored "-Wimplicit-retain-self"
-			
 			result = snapshot;
-			
-		#pragma clang diagnostic pop
 		});
 		
 		return result;
@@ -2933,7 +2862,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 	// Forward the changeset to all other connections so they can perform any needed updates.
 	// Generally this means updating the in-memory components such as the cache.
 	
-	NSMutableArray<YapDatabaseConnection *> *strongConnections = nil;
 	dispatch_group_t group = NULL;
 	
 	for (YapDatabaseConnectionState *state in connectionStates)
@@ -2945,11 +2873,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 			
 			if (connection)
 			{
-				if (strongConnections == nil)
-					strongConnections = [NSMutableArray array];
-				
-				[strongConnections addObject:connection];
-				
 				if (group == NULL)
 					group = dispatch_group_create();
 				
@@ -2964,14 +2887,8 @@ static int connectionBusyHandler(void *ptr, int count) {
 	// Schedule block to be executed once all connections have processed the changes.
 	
 	BOOL isInternalChangeset = (sender == nil);
-	__weak YapDatabase *weakSelf = self;
-	
+
 	dispatch_block_t block = ^{
-	#pragma clang diagnostic push
-	#pragma clang diagnostic warning "-Wimplicit-retain-self" // Turning warnings *** ON ***
-		
-		__strong YapDatabase *strongSelf = weakSelf;
-		if (strongSelf == nil) return;
 		
 		// All connections have now processed the changes.
 		// So we no longer need to retain the changeset in memory.
@@ -2986,37 +2903,19 @@ static int connectionBusyHandler(void *ptr, int count) {
 			YDBLogVerbose(@"Dropping processed changeset %@ for database: %@",
 			              [changeset objectForKey:YapDatabaseSnapshotKey], self);
 			
-			[strongSelf->changesets removeObjectAtIndex:0];
+			[changesets removeObjectAtIndex:0];
 		}
 		
 		#if !OS_OBJECT_USE_OBJC
 		if (group)
 			dispatch_release(group);
 		#endif
-		
-	#pragma clang diagnostic pop
 	};
 	
 	if (group)
 		dispatch_group_notify(group, snapshotQueue, block);
 	else
 		block();
-	
-	if (strongConnections)
-	{
-		// Edge case protection:
-		// Bug fix for issues: #437, #441
-		//
-		// Deadlock crash if:
-		// - YapDatabase is the last one holding a strong reference to a YapDatabaseConnection instance
-		// - The [connection dealloc] call occurs within the snapshotQueue
-		//
-		// This is a workaround to ensure that the dealloc occurs outside the snapshotQueue.
-		//
-		dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{ @autoreleasepool {
-			[strongConnections removeAllObjects];
-		}});
-	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3058,8 +2957,8 @@ static int connectionBusyHandler(void *ptr, int count) {
 	__weak YapDatabase *weakSelf = self;
 	
 	dispatch_async(checkpointQueue, ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic warning "-Wimplicit-retain-self" // Turning warnings *** ON ***
+#pragma clang diagnostic push
+#pragma clang diagnostic warning "-Wimplicit-retain-self"
 		
 		__strong YapDatabase *strongSelf = weakSelf;
 		if (strongSelf == nil) return;
@@ -3072,7 +2971,7 @@ static int connectionBusyHandler(void *ptr, int count) {
 		
 		[strongSelf passiveCheckpoint];
 		
-	#pragma clang diagnostic pop
+#pragma clang diagnostic pop
 	}});
 }
 
@@ -3087,7 +2986,7 @@ static int connectionBusyHandler(void *ptr, int count) {
 	
 	dispatch_async(writeQueue, ^{
 	#pragma clang diagnostic push
-	#pragma clang diagnostic warning "-Wimplicit-retain-self" // Turning warnings *** ON ***
+	#pragma clang diagnostic warning "-Wimplicit-retain-self"
 		
 		__strong YapDatabase *strongSelf = weakSelf;
 		if (strongSelf == nil) return;
@@ -3161,7 +3060,7 @@ static int connectionBusyHandler(void *ptr, int count) {
 		
 		dispatch_async(writeQueue, ^{ @autoreleasepool {
 		#pragma clang diagnostic push
-		#pragma clang diagnostic warning "-Wimplicit-retain-self" // Turning warnings *** ON ***
+		#pragma clang diagnostic warning "-Wimplicit-retain-self"
 			
 			__strong YapDatabase *strongSelf = weakSelf;
 			if (strongSelf == nil) return;
@@ -3334,33 +3233,20 @@ static int connectionBusyHandler(void *ptr, int count) {
 {
 	NSAssert(dispatch_get_specific(IsOnWriteQueueKey), @"Must go through writeQueue.");
 	
-	__block NSMutableArray<YapDatabaseConnection *> *strongConnections = nil;
-	__block dispatch_group_t group = NULL;
+	dispatch_group_t group = dispatch_group_create();
 	
 	__block YAPUnfairLock spinLock = YAP_UNFAIR_LOCK_INIT;
 	__block atomic_bool hasWriteQueue = true;
 	
 	dispatch_sync(snapshotQueue, ^{ @autoreleasepool {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		for (YapDatabaseConnectionState *state in connectionStates)
 		{
 			if (state->activeReadTransaction && state->longLivedReadTransaction)
 			{
-				// Create strong reference (state->connection is weak)
 				__strong YapDatabaseConnection *connection = state->connection;
-				
 				if (connection)
 				{
-					if (strongConnections == nil)
-						strongConnections = [NSMutableArray array];
-					
-					[strongConnections addObject:connection];
-					
-					if (group == NULL)
-						group = dispatch_group_create();
-					
 					dispatch_group_async(group, connection->connectionQueue, ^{
 						
 						YAPUnfairLockLock(&spinLock);
@@ -3375,32 +3261,9 @@ static int connectionBusyHandler(void *ptr, int count) {
 				}
 			}
 		}
-		
-	#pragma clang diagnostic pop
 	}});
 	
-	if (strongConnections)
-	{
-		// Edge case protection:
-		// Bug fix for issues: #437, #441
-		//
-		// Deadlock crash if:
-		// - YapDatabase is the last one holding a strong reference to a YapDatabaseConnection instance
-		// - The [connection dealloc] call occurs within the snapshotQueue
-		//
-		// This is a workaround to ensure that the dealloc occurs outside the snapshotQueue.
-		//
-		[strongConnections removeAllObjects];
-	}
-	
-	// dispatch_group_wait():
-	// Returns zero on success (all blocks associated with the group completed before the specified timeout)
-	// or non-zero on error (timeout occurred).
-	//
-	long ready = 0;
-	if (group) {
-		ready = dispatch_group_wait(group, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)));
-	}
+	long ready = dispatch_group_wait(group, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)));
 	
 	if (ready != 0)
 	{
@@ -3439,9 +3302,6 @@ static int connectionBusyHandler(void *ptr, int count) {
 	}
 }
 
-#ifdef DEBUG
-
-// This method is only used by tests.
 - (void)flushInternalQueue
 {
     dispatch_sync(internalQueue,
@@ -3449,14 +3309,11 @@ static int connectionBusyHandler(void *ptr, int count) {
                   });
 }
 
-// This method is only used by tests.
 - (void)flushCheckpointQueue
 {
     dispatch_sync(checkpointQueue,
                   ^{
                   });
 }
-
-#endif
 
 @end

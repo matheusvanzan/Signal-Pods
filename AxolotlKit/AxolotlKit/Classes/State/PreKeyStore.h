@@ -1,22 +1,22 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  PreKeyStore.h
+//  AxolotlKit
+//
+//  Created by Frederic Jacobs on 12/10/14.
+//  Copyright (c) 2014 Frederic Jacobs. All rights reserved.
 //
 
-#import "PreKeyRecord.h"
 #import <Foundation/Foundation.h>
-
-NS_ASSUME_NONNULL_BEGIN
+#import "PreKeyRecord.h"
 
 @protocol PreKeyStore <NSObject>
 
-- (PreKeyRecord *)throws_loadPreKey:(int)preKeyId NS_SWIFT_UNAVAILABLE("throws objc exceptions");
+- (PreKeyRecord*)loadPreKey:(int)preKeyId;
 
-- (void)storePreKey:(int)preKeyId preKeyRecord:(PreKeyRecord *)record;
+- (void)storePreKey:(int)preKeyId preKeyRecord:(PreKeyRecord*)record;
 
 - (BOOL)containsPreKey:(int)preKeyId;
 
 - (void)removePreKey:(int)preKeyId;
 
 @end
-
-NS_ASSUME_NONNULL_END

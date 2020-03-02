@@ -1,95 +1,74 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
 #import "ChainKey.h"
 #import "TSDerivedSecrets.h"
-#import <CommonCrypto/CommonCrypto.h>
 #import <Curve25519Kit/Curve25519.h>
-
-NS_ASSUME_NONNULL_BEGIN
+#import <CommonCrypto/CommonCrypto.h>
 
 @implementation ChainKey
 
-static NSString *const kCoderKey = @"kCoderKey";
-static NSString *const kCoderIndex = @"kCoderIndex";
+static NSString* const kCoderKey     = @"kCoderKey";
+static NSString* const kCoderIndex   = @"kCoderIndex";
 
 #define kTSKeySeedLength 1
 
-static uint8_t kMessageKeySeed[kTSKeySeedLength] = { 01 };
-static uint8_t kChainKeySeed[kTSKeySeedLength] = { 02 };
+static uint8_t kMessageKeySeed[kTSKeySeedLength]    = {01};
+static uint8_t kChainKeySeed[kTSKeySeedLength]      = {02};
 
-+ (BOOL)supportsSecureCoding
-{
++ (BOOL)supportsSecureCoding{
     return YES;
 }
 
-- (nullable id)initWithCoder:(NSCoder *)aDecoder
-{
-    NSData *key = [aDecoder decodeObjectOfClass:[NSData class] forKey:kCoderKey];
-    int index = [aDecoder decodeIntForKey:kCoderIndex];
-
-    return [self initWithData:key index:index];
-}
-
-- (void)encodeWithCoder:(NSCoder *)aCoder
-{
-    [aCoder encodeObject:_key forKey:kCoderKey];
-    [aCoder encodeInt:_index forKey:kCoderIndex];
-}
-
-- (instancetype)initWithData:(NSData *)chainKey index:(int)index
-{
-    OWSAssert(chainKey.length == 32);
-    OWSAssert(index >= 0);
-
-    self = [super init];
-
+- (id)initWithCoder:(NSCoder *)aDecoder{
+    self   = [super init];
+    
     if (self) {
-        _key = chainKey;
-        _index = index;
+        _key   = [aDecoder decodeObjectOfClass:[NSData class] forKey:kCoderKey];
+        _index = [aDecoder decodeIntForKey:kCoderIndex];
     }
-
+    
     return self;
 }
 
-- (instancetype)nextChainKey
-{
-    NSData *nextCK = [self baseMaterial:[NSData dataWithBytes:kChainKeySeed length:kTSKeySeedLength]];
-    OWSAssert(nextCK.length == 32);
-
-    int nextIndex;
-    ows_add_overflow(self.index, 1, &nextIndex);
-    return [[ChainKey alloc] initWithData:nextCK index:nextIndex];
+- (void)encodeWithCoder:(NSCoder *)aCoder{
+    [aCoder encodeObject:_key forKey:kCoderKey];
+    [aCoder encodeInt:_index  forKey:kCoderIndex];
 }
 
-- (MessageKeys *)throws_messageKeys
-{
+-(instancetype)initWithData:(NSData *)chainKey index:(int)index{
+    SPKAssert(chainKey.length == ECCKeyLength);
+
+    self = [super init];
+    
+    if (self) {
+        _key   = chainKey;
+        _index = index;
+    }
+    
+    return self;
+}
+
+- (instancetype) nextChainKey{
+    NSData* nextCK = [self baseMaterial:[NSData dataWithBytes:kChainKeySeed length:kTSKeySeedLength]];
+    
+    return [[ChainKey alloc] initWithData:nextCK index:self.index+1];
+}
+
+- (MessageKeys*)messageKeys{
     NSData *inputKeyMaterial = [self baseMaterial:[NSData dataWithBytes:kMessageKeySeed length:kTSKeySeedLength]];
-    TSDerivedSecrets *derivedSecrets = [TSDerivedSecrets throws_derivedMessageKeysWithData:inputKeyMaterial];
-    return [[MessageKeys alloc] initWithCipherKey:derivedSecrets.cipherKey
-                                           macKey:derivedSecrets.macKey
-                                               iv:derivedSecrets.iv
-                                            index:self.index];
+    TSDerivedSecrets *derivedSecrets = [TSDerivedSecrets derivedMessageKeysWithData:inputKeyMaterial];
+    return [[MessageKeys alloc] initWithCipherKey:derivedSecrets.cipherKey macKey:derivedSecrets.macKey iv:derivedSecrets.iv index:self.index];
 }
 
-- (NSData *)baseMaterial:(NSData *)seed
-{
-    OWSAssert(self.key);
-    OWSAssert(self.key.length == 32);
-    OWSAssert(seed);
-    OWSAssert(seed.length == kTSKeySeedLength);
-
-    NSMutableData *_Nullable bufferData = [NSMutableData dataWithLength:CC_SHA256_DIGEST_LENGTH];
-    OWSAssert(bufferData);
-
+- (NSData*)baseMaterial:(NSData*)seed{
+    uint8_t result[CC_SHA256_DIGEST_LENGTH] = {0};
     CCHmacContext ctx;
     CCHmacInit(&ctx, kCCHmacAlgSHA256, [self.key bytes], [self.key length]);
     CCHmacUpdate(&ctx, [seed bytes], [seed length]);
-    CCHmacFinal(&ctx, bufferData.mutableBytes);
-    return [bufferData copy];
+    CCHmacFinal(&ctx, result);
+    return [NSData dataWithBytes:result length:sizeof(result)];
 }
 
 @end
-
-NS_ASSUME_NONNULL_END

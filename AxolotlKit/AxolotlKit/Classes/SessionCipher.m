@@ -1,27 +1,33 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  Copyright (c) 2017 Open Whisper Systems. All rights reserved.
 //
 
 #import "SessionCipher.h"
-#import "AES-CBC.h"
-#import "AxolotlExceptions.h"
-#import "AxolotlParameters.h"
-#import "ChainKey.h"
-#import "MessageKeys.h"
-#import "NSData+keyVersionByte.h"
-#import "PreKeyStore.h"
-#import "RootKey.h"
-#import "SessionBuilder.h"
-#import "SessionState.h"
-#import "SessionStore.h"
-#import "SignedPreKeyStore.h"
-#import "WhisperMessage.h"
 #import <Curve25519Kit/Curve25519.h>
 #import <Curve25519Kit/Ed25519.h>
-#import <HKDFKit/HKDFKit.h>
-#import <SignalCoreKit/SCKExceptionWrapper.h>
 
-NS_ASSUME_NONNULL_BEGIN
+#import "NSData+keyVersionByte.h"
+
+#import "AxolotlExceptions.h"
+#import "SessionBuilder.h"
+#import "SessionStore.h"
+#import "AES-CBC.h"
+#import "AxolotlParameters.h"
+#import "MessageKeys.h"
+#import "SessionState.h"
+#import "ChainKey.h"
+#import "RootKey.h"
+#import "WhisperMessage.h"
+
+#import "SignedPreKeyStore.h"
+#import "PreKeyStore.h"
+
+#import <HKDFKit/HKDFKit.h>
+
+#define SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(major, minor) \
+    ([[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion){.majorVersion = major, .minorVersion = minor, .patchVersion = 0}])
+
+static dispatch_queue_t _sessionCipherDispatchQueue;
 
 @interface SessionCipher ()
 
@@ -35,13 +41,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-#pragma mark -
 
 @implementation SessionCipher
 
+
 - (instancetype)initWithAxolotlStore:(id<AxolotlStore>)sessionStore recipientId:(NSString*)recipientId deviceId:(int)deviceId{
-    OWSAssert(sessionStore);
-    OWSAssert(recipientId);
     return [self initWithSessionStore:sessionStore
                           preKeyStore:sessionStore
                     signedPreKeyStore:sessionStore
@@ -56,12 +60,6 @@ NS_ASSUME_NONNULL_BEGIN
                     identityKeyStore:(id<IdentityKeyStore>)identityKeyStore
                          recipientId:(NSString*)recipientId
                             deviceId:(int)deviceId{
-    OWSAssert(sessionStore);
-    OWSAssert(preKeyStore);
-    OWSAssert(signedPreKeyStore);
-    OWSAssert(identityKeyStore);
-    OWSAssert(recipientId);
-
     self = [super init];
 
     if (self){
@@ -80,37 +78,44 @@ NS_ASSUME_NONNULL_BEGIN
     return self;
 }
 
-- (nullable id<CipherMessage>)encryptMessage:(NSData *)paddedMessage
-                             protocolContext:(nullable id)protocolContext
-                                       error:(NSError **)outError
-{
-    __block id<CipherMessage> result;
-    [SCKExceptionWrapper
-        tryBlock:^{
-            result = [self throws_encryptMessage:paddedMessage protocolContext:protocolContext];
-        }
-           error:outError];
+#pragma mark - dispatch queue 
 
-    return result;
++ (dispatch_queue_t)getSessionCipherDispatchQueue;
+{
+    if (_sessionCipherDispatchQueue) {
+        return _sessionCipherDispatchQueue;
+    } else {
+        return dispatch_get_main_queue();
+    }
 }
 
-- (id<CipherMessage>)throws_encryptMessage:(NSData *)paddedMessage protocolContext:(nullable id)protocolContext
++ (void)setSessionCipherDispatchQueue:(dispatch_queue_t)dispatchQueue
 {
-    OWSAssert(paddedMessage);
+    _sessionCipherDispatchQueue = dispatchQueue;
+}
 
-    SessionRecord *sessionRecord =
-        [self.sessionStore loadSession:self.recipientId deviceId:self.deviceId protocolContext:protocolContext];
+- (void)assertOnSessionCipherDispatchQueue
+{
+#ifdef DEBUG
+    if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(10, 0)) {
+        dispatch_assert_queue([[self class] getSessionCipherDispatchQueue]);
+    } // else, skip assert as it's a development convenience.
+#endif
+}
+
+- (id<CipherMessage>)encryptMessage:(NSData*)paddedMessage{
+    [self assertOnSessionCipherDispatchQueue];
+    SessionRecord *sessionRecord = [self.sessionStore loadSession:self.recipientId deviceId:self.deviceId];
     SessionState *sessionState = sessionRecord.sessionState;
     ChainKey *chainKey = sessionState.senderChainKey;
-    MessageKeys *messageKeys = [chainKey throws_messageKeys];
+    MessageKeys *messageKeys     = chainKey.messageKeys;
     NSData *senderRatchetKey = sessionState.senderRatchetKey;
     int previousCounter = sessionState.previousCounter;
     int sessionVersion = sessionState.version;
 
     if (![self.identityKeyStore isTrustedIdentityKey:sessionState.remoteIdentityKey
                                          recipientId:self.recipientId
-                                           direction:TSMessageDirectionOutgoing
-                                     protocolContext:protocolContext]) {
+                                           direction:TSMessageDirectionOutgoing]) {
         DDLogWarn(
             @"%@ Previously known identity key for while encrypting for recipient: %@", self.tag, self.recipientId);
         @throw [NSException exceptionWithName:UntrustedIdentityKeyException
@@ -118,22 +123,19 @@ NS_ASSUME_NONNULL_BEGIN
                                      userInfo:@{}];
     }
 
-    [self.identityKeyStore saveRemoteIdentity:sessionState.remoteIdentityKey
-                                  recipientId:self.recipientId
-                              protocolContext:protocolContext];
+    [self.identityKeyStore saveRemoteIdentity:sessionState.remoteIdentityKey recipientId:self.recipientId];
 
-    NSData *ciphertextBody =
-        [AES_CBC throws_encryptCBCMode:paddedMessage withKey:messageKeys.cipherKey withIV:messageKeys.iv];
+    NSData *ciphertextBody = [AES_CBC encryptCBCMode:paddedMessage withKey:messageKeys.cipherKey withIV:messageKeys.iv];
 
     id<CipherMessage> cipherMessage =
-        [[WhisperMessage alloc] init_throws_withVersion:sessionVersion
-                                                 macKey:messageKeys.macKey
-                                       senderRatchetKey:senderRatchetKey.prependKeyType
-                                                counter:chainKey.index
-                                        previousCounter:previousCounter
-                                             cipherText:ciphertextBody
-                                      senderIdentityKey:sessionState.localIdentityKey.prependKeyType
-                                    receiverIdentityKey:sessionState.remoteIdentityKey.prependKeyType];
+        [[WhisperMessage alloc] initWithVersion:sessionVersion
+                                         macKey:messageKeys.macKey
+                               senderRatchetKey:senderRatchetKey.prependKeyType
+                                        counter:chainKey.index
+                                previousCounter:previousCounter
+                                     cipherText:ciphertextBody
+                              senderIdentityKey:sessionState.localIdentityKey.prependKeyType
+                            receiverIdentityKey:sessionState.remoteIdentityKey.prependKeyType];
 
     if ([sessionState hasUnacknowledgedPreKeyMessage]) {
         PendingPreKey *items = [sessionState unacknowledgedPreKeyMessageItems];
@@ -142,79 +144,36 @@ NS_ASSUME_NONNULL_BEGIN
         DDLogInfo(@"Building PreKeyWhisperMessage for: %@ with preKeyId: %d", self.recipientId, items.preKeyId);
 
         cipherMessage =
-            [[PreKeyWhisperMessage alloc] init_throws_withWhisperMessage:cipherMessage
-                                                          registrationId:localRegistrationId
-                                                                prekeyId:items.preKeyId
-                                                          signedPrekeyId:items.signedPreKeyId
-                                                                 baseKey:items.baseKey.prependKeyType
-                                                             identityKey:sessionState.localIdentityKey.prependKeyType];
+            [[PreKeyWhisperMessage alloc] initWithWhisperMessage:cipherMessage
+                                                  registrationId:localRegistrationId
+                                                        prekeyId:items.preKeyId
+                                                  signedPrekeyId:items.signedPreKeyId
+                                                         baseKey:items.baseKey.prependKeyType
+                                                     identityKey:sessionState.localIdentityKey.prependKeyType];
     }
 
     [sessionState setSenderChainKey:[chainKey nextChainKey]];
-    [self.sessionStore storeSession:self.recipientId
-                           deviceId:self.deviceId
-                            session:sessionRecord
-                    protocolContext:protocolContext];
-
+    [self.sessionStore storeSession:self.recipientId deviceId:self.deviceId session:sessionRecord];
+    
     return cipherMessage;
 }
 
-- (nullable NSData *)decrypt:(id<CipherMessage>)whisperMessage
-             protocolContext:(nullable id)protocolContext
-                       error:(NSError **)outError
-{
-    __block NSData *_Nullable result;
-    [SCKExceptionWrapper
-        tryBlock:^{
-            result = [self throws_decrypt:whisperMessage protocolContext:protocolContext];
-        }
-           error:outError];
-
-    return result;
-}
-
-- (NSData *)throws_decrypt:(id<CipherMessage>)whisperMessage protocolContext:(nullable id)protocolContext
-{
-    OWSAssert(whisperMessage);
-
-    switch (whisperMessage.cipherMessageType) {
-        case CipherMessageType_Whisper:
-            if (![whisperMessage isKindOfClass:[WhisperMessage class]]) {
-                OWSFail(@"Unexpected message type: %@", [whisperMessage class]);
-                return nil;
-            }
-            return [self throws_decryptWhisperMessage:(WhisperMessage *)whisperMessage protocolContext:protocolContext];
-        case CipherMessageType_Prekey:
-            if (![whisperMessage isKindOfClass:[PreKeyWhisperMessage class]]) {
-                OWSFail(@"Unexpected message type: %@", [whisperMessage class]);
-                return nil;
-            }
-            return [self throws_decryptPreKeyWhisperMessage:(PreKeyWhisperMessage *)whisperMessage
-                                            protocolContext:protocolContext];
-        default:
-            OWSFailDebug(@"Unexpected message type: %@", [whisperMessage class]);
-            break;
+- (NSData*)decrypt:(id<CipherMessage>)whisperMessage{
+    [self assertOnSessionCipherDispatchQueue];
+    if ([whisperMessage isKindOfClass:[PreKeyWhisperMessage class]]) {
+        return [self decryptPreKeyWhisperMessage:(PreKeyWhisperMessage*)whisperMessage];
+    } else{
+        return [self decryptWhisperMessage:whisperMessage];
     }
 }
 
-- (NSData *)throws_decryptPreKeyWhisperMessage:(PreKeyWhisperMessage *)preKeyWhisperMessage
-                               protocolContext:(nullable id)protocolContext
-{
-    OWSAssert(preKeyWhisperMessage);
+- (NSData*)decryptPreKeyWhisperMessage:(PreKeyWhisperMessage*)preKeyWhisperMessage{
+    [self assertOnSessionCipherDispatchQueue];
+    SessionRecord *sessionRecord = [self.sessionStore loadSession:self.recipientId deviceId:self.deviceId];
+    int unsignedPreKeyId         = [self.sessionBuilder processPrekeyWhisperMessage:preKeyWhisperMessage withSession:sessionRecord];
+    NSData *plaintext            = [self decryptWithSessionRecord:sessionRecord whisperMessage:preKeyWhisperMessage.message];
 
-    SessionRecord *sessionRecord =
-        [self.sessionStore loadSession:self.recipientId deviceId:self.deviceId protocolContext:protocolContext];
-    int unsignedPreKeyId = [self.sessionBuilder throws_processPrekeyWhisperMessage:preKeyWhisperMessage
-                                                                       withSession:sessionRecord
-                                                                   protocolContext:protocolContext];
-    NSData *plaintext = [self throws_decryptWithSessionRecord:sessionRecord
-                                               whisperMessage:preKeyWhisperMessage.message
-                                              protocolContext:protocolContext];
-
-    [self.sessionStore storeSession:self.recipientId
-                           deviceId:self.deviceId
-                            session:sessionRecord
-                    protocolContext:protocolContext];
+    [self.sessionStore storeSession:self.recipientId deviceId:self.deviceId session:sessionRecord];
 
     // If there was an unsigned PreKey
     if (unsignedPreKeyId >= 0) {
@@ -224,20 +183,15 @@ NS_ASSUME_NONNULL_BEGIN
     return plaintext;
 }
 
-- (NSData *)throws_decryptWhisperMessage:(WhisperMessage *)whisperMessage protocolContext:(nullable id)protocolContext
-{
-    OWSAssert(whisperMessage);
+- (NSData*)decryptWhisperMessage:(WhisperMessage*)message{
+    [self assertOnSessionCipherDispatchQueue];
 
-    SessionRecord *sessionRecord =
-        [self.sessionStore loadSession:self.recipientId deviceId:self.deviceId protocolContext:protocolContext];
-    NSData *plaintext = [self throws_decryptWithSessionRecord:sessionRecord
-                                               whisperMessage:whisperMessage
-                                              protocolContext:protocolContext];
+    SessionRecord  *sessionRecord  = [self.sessionStore loadSession:self.recipientId deviceId:self.deviceId];
+    NSData         *plaintext      = [self decryptWithSessionRecord:sessionRecord whisperMessage:message];
 
     if (![self.identityKeyStore isTrustedIdentityKey:sessionRecord.sessionState.remoteIdentityKey
                                          recipientId:self.recipientId
-                                           direction:TSMessageDirectionIncoming
-                                     protocolContext:protocolContext]) {
+                                           direction:TSMessageDirectionIncoming]) {
         DDLogWarn(
             @"%@ Previously known identity key for while decrypting from recipient: %@", self.tag, self.recipientId);
         @throw [NSException exceptionWithName:UntrustedIdentityKeyException
@@ -246,30 +200,20 @@ NS_ASSUME_NONNULL_BEGIN
     }
 
     [self.identityKeyStore saveRemoteIdentity:sessionRecord.sessionState.remoteIdentityKey
-                                  recipientId:self.recipientId
-                              protocolContext:protocolContext];
-    [self.sessionStore storeSession:self.recipientId
-                           deviceId:self.deviceId
-                            session:sessionRecord
-                    protocolContext:protocolContext];
-
+                                  recipientId:self.recipientId];
+    [self.sessionStore storeSession:self.recipientId deviceId:self.deviceId session:sessionRecord];
+    
     return plaintext;
 }
 
-- (NSData *)throws_decryptWithSessionRecord:(SessionRecord *)sessionRecord
-                             whisperMessage:(WhisperMessage *)whisperMessage
-                            protocolContext:(nullable id)protocolContext
-{
-    OWSAssert(sessionRecord);
-    OWSAssert(whisperMessage);
 
+-(NSData*)decryptWithSessionRecord:(SessionRecord*)sessionRecord whisperMessage:(WhisperMessage*)message{
+    [self assertOnSessionCipherDispatchQueue];
     SessionState   *sessionState   = [sessionRecord sessionState];
     NSMutableArray *exceptions     = [NSMutableArray array];
     
     @try {
-        NSData *decryptedData = [self throws_decryptWithSessionState:sessionState
-                                                      whisperMessage:whisperMessage
-                                                     protocolContext:protocolContext];
+        NSData *decryptedData = [self decryptWithSessionState:sessionState whisperMessage:message];
         DDLogDebug(@"%@ successfully decrypted with current session state: %@", self.tag, sessionState);
         return decryptedData;
     }
@@ -288,11 +232,9 @@ NS_ASSUME_NONNULL_BEGIN
     [[sessionRecord previousSessionStates]
         enumerateObjectsUsingBlock:^(SessionState *_Nonnull previousState, NSUInteger idx, BOOL *_Nonnull stop) {
             @try {
-                decryptedData = [self throws_decryptWithSessionState:previousState
-                                                      whisperMessage:whisperMessage
-                                                     protocolContext:protocolContext];
+                decryptedData = [self decryptWithSessionState:previousState whisperMessage:message];
                 DDLogInfo(@"%@ successfully decrypted with PREVIOUS session state: %@", self.tag, previousState);
-                OWSAssert(decryptedData != nil);
+                NSAssert(decryptedData != nil, @"Expected exception or non-nil data");
                 stateToPromoteIdx = idx;
                 *stop = YES;
             } @catch (NSException *exception) {
@@ -302,7 +244,7 @@ NS_ASSUME_NONNULL_BEGIN
 
     if (decryptedData) {
         SessionState *sessionStateToPromote = [sessionRecord previousSessionStates][stateToPromoteIdx];
-        OWSAssert(sessionStateToPromote != nil);
+        NSAssert(sessionStateToPromote != nil, @"the session state we just used is now missing");
         DDLogInfo(@"%@ promoting session: %@", self.tag, sessionStateToPromote);
         [[sessionRecord previousSessionStates] removeObjectAtIndex:stateToPromoteIdx];
         [sessionRecord promoteState:sessionStateToPromote];
@@ -310,8 +252,7 @@ NS_ASSUME_NONNULL_BEGIN
         return decryptedData;
     }
 
-    BOOL containsActiveSession =
-        [self.sessionStore containsSession:self.recipientId deviceId:self.deviceId protocolContext:protocolContext];
+    BOOL containsActiveSession = [self.sessionStore containsSession:self.recipientId deviceId:self.deviceId];
     DDLogError(@"%@ No valid session for recipient: %@ containsActiveSession: %@, previousStates: %lu",
         self.tag,
         self.recipientId,
@@ -332,54 +273,36 @@ NS_ASSUME_NONNULL_BEGIN
     }
 }
 
-- (NSData *)throws_decryptWithSessionState:(SessionState *)sessionState
-                            whisperMessage:(WhisperMessage *)whisperMessage
-                           protocolContext:(nullable id)protocolContext
-{
-    OWSAssert(sessionState);
-    OWSAssert(whisperMessage);
-
+-(NSData*)decryptWithSessionState:(SessionState*)sessionState whisperMessage:(WhisperMessage*)message{
+    [self assertOnSessionCipherDispatchQueue];
     if (![sessionState hasSenderChain]) {
         @throw [NSException exceptionWithName:InvalidMessageException reason:@"Uninitialized session!" userInfo:nil];
     }
-
-    if (whisperMessage.version != sessionState.version) {
-        @throw [NSException exceptionWithName:InvalidMessageException
-                                       reason:[NSString stringWithFormat:@"Got message version %d but was expecting %d",
-                                                        whisperMessage.version,
-                                                        sessionState.version]
-                                     userInfo:nil];
+    
+    if (message.version != sessionState.version) {
+        @throw [NSException exceptionWithName:InvalidMessageException reason:[NSString stringWithFormat:@"Got message version %d but was expecting %d", message.version, sessionState.version] userInfo:nil];
     }
 
-    int messageVersion = whisperMessage.version;
-    NSData *theirEphemeral = whisperMessage.senderRatchetKey.throws_removeKeyType;
-    int counter = whisperMessage.counter;
-    ChainKey *chainKey = [self throws_getOrCreateChainKeys:sessionState theirEphemeral:theirEphemeral];
-    OWSAssert(chainKey);
-    MessageKeys *messageKeys = [self throws_getOrCreateMessageKeysForSession:sessionState
-                                                              theirEphemeral:theirEphemeral
-                                                                    chainKey:chainKey
-                                                                     counter:counter];
-    OWSAssert(messageKeys);
+    int messageVersion       = message.version;
+    NSData *theirEphemeral   = message.senderRatchetKey.removeKeyType;
+    int counter              = message.counter;
+    ChainKey *chainKey       = [self getOrCreateChainKeys:sessionState theirEphemeral:theirEphemeral];
+    SPKAssert(chainKey);
+    MessageKeys *messageKeys = [self getOrCreateMessageKeysForSession:sessionState theirEphemeral:theirEphemeral chainKey:chainKey counter:counter];
+    SPKAssert(messageKeys);
 
-    [whisperMessage throws_verifyMacWithVersion:messageVersion
-                              senderIdentityKey:sessionState.remoteIdentityKey
-                            receiverIdentityKey:sessionState.localIdentityKey
-                                         macKey:messageKeys.macKey];
-
-    NSData *plaintext =
-        [AES_CBC throws_decryptCBCMode:whisperMessage.cipherText withKey:messageKeys.cipherKey withIV:messageKeys.iv];
-
+    [message verifyMacWithVersion:messageVersion senderIdentityKey:sessionState.remoteIdentityKey receiverIdentityKey:sessionState.localIdentityKey macKey:messageKeys.macKey];
+    
+    NSData *plaintext = [AES_CBC decryptCBCMode:message.cipherText withKey:messageKeys.cipherKey withIV:messageKeys.iv];
+    
     [sessionState clearUnacknowledgedPreKeyMessage];
     
     return plaintext;
 }
 
-- (ChainKey *)throws_getOrCreateChainKeys:(SessionState *)sessionState theirEphemeral:(NSData *)theirEphemeral
-{
-    OWSAssert(sessionState);
-    OWSGuardWithException(theirEphemeral, InvalidMessageException);
-    OWSGuardWithException(theirEphemeral.length == 32, InvalidMessageException);
+- (ChainKey*)getOrCreateChainKeys:(SessionState*)sessionState theirEphemeral:(NSData*)theirEphemeral{
+    [self assertOnSessionCipherDispatchQueue];
+    SPKAssert(theirEphemeral.length == ECCKeyLength);
 
     @try {
         if ([sessionState hasReceiverChain:theirEphemeral]) {
@@ -388,29 +311,24 @@ NS_ASSUME_NONNULL_BEGIN
         } else{
             DDLogInfo(@"%@ %@.%d creating new chains.", self.tag, self.recipientId, self.deviceId);
             RootKey *rootKey = [sessionState rootKey];
-            OWSAssert(rootKey.keyData.length == 32);
+            SPKAssert(rootKey.keyData.length == ECCKeyLength);
 
             ECKeyPair *ourEphemeral = [sessionState senderRatchetKeyPair];
-            OWSAssert(ourEphemeral.publicKey.length == 32);
+            SPKAssert(ourEphemeral.publicKey.length == ECCKeyLength);
 
-            RKCK *receiverChain =
-                [rootKey throws_createChainWithTheirEphemeral:theirEphemeral ourEphemeral:ourEphemeral];
+            RKCK *receiverChain = [rootKey createChainWithTheirEphemeral:theirEphemeral ourEphemeral:ourEphemeral];
 
             ECKeyPair *ourNewEphemeral = [Curve25519 generateKeyPair];
-            OWSAssert(ourNewEphemeral.publicKey.length == 32);
+            SPKAssert(ourNewEphemeral.publicKey.length == ECCKeyLength);
 
-            RKCK *senderChain = [receiverChain.rootKey throws_createChainWithTheirEphemeral:theirEphemeral
-                                                                               ourEphemeral:ourNewEphemeral];
+            RKCK *senderChain = [receiverChain.rootKey createChainWithTheirEphemeral:theirEphemeral ourEphemeral:ourNewEphemeral];
 
-            OWSAssert(senderChain.rootKey.keyData.length == 32);
+            SPKAssert(senderChain.rootKey.keyData.length == ECCKeyLength);
             [sessionState setRootKey:senderChain.rootKey];
 
-            OWSAssert(receiverChain.chainKey.key.length == 32);
+            SPKAssert(receiverChain.chainKey.key.length == ECCKeyLength);
             [sessionState addReceiverChain:theirEphemeral chainKey:receiverChain.chainKey];
-
-            int previousCounter;
-            ows_sub_overflow(sessionState.senderChainKey.index, 1, &previousCounter);
-            [sessionState setPreviousCounter:MAX(previousCounter, 0)];
+            [sessionState setPreviousCounter:MAX(sessionState.senderChainKey.index-1 , 0)];
             [sessionState setSenderChain:ourNewEphemeral chainKey:senderChain.chainKey];
             
             return receiverChain.chainKey;
@@ -421,55 +339,40 @@ NS_ASSUME_NONNULL_BEGIN
     }
 }
 
-- (MessageKeys *)throws_getOrCreateMessageKeysForSession:(SessionState *)sessionState
-                                          theirEphemeral:(NSData *)theirEphemeral
-                                                chainKey:(ChainKey *)chainKey
-                                                 counter:(int)counter
-{
-    OWSAssert(sessionState);
-    OWSGuardWithException(theirEphemeral, InvalidMessageException);
-    OWSGuardWithException(theirEphemeral.length == 32, InvalidMessageException);
-    OWSAssert(chainKey);
-
+- (MessageKeys*)getOrCreateMessageKeysForSession:(SessionState*)sessionState theirEphemeral:(NSData*)theirEphemeral chainKey:(ChainKey*)chainKey counter:(int)counter{
+    [self assertOnSessionCipherDispatchQueue];
     if (chainKey.index > counter) {
         if ([sessionState hasMessageKeys:theirEphemeral counter:counter]) {
             return [sessionState removeMessageKeys:theirEphemeral counter:counter];
         } else {
-            OWSLogInfo(
+            DDLogInfo(
                 @"%@ %@.%d Duplicate message for counter: %d", self.tag, self.recipientId, self.deviceId, counter);
-            OWSLogFlush();
             @throw [NSException exceptionWithName:DuplicateMessageException reason:@"Received message with old counter!" userInfo:@{}];
         }
     }
 
     NSUInteger kCounterLimit = 2000;
-    int counterOffset;
-    if (__builtin_sub_overflow(counter, chainKey.index, &counterOffset)) {
-        OWSFailDebug(@"Overflow while calculating counter offset");
-        OWSRaiseException(InvalidMessageException, @"Overflow while calculating counter offset");
-    }
-    if (counterOffset > kCounterLimit) {
-        OWSLogError(@"%@ %@.%d Exceeded future message limit: %lu, index: %d, counter: %d)",
+    if (counter - chainKey.index > kCounterLimit) {
+        DDLogError(@"%@ %@.%d Exceeded future message limit: %lu, index: %d, counter: %d)",
             self.tag,
             self.recipientId,
             self.deviceId,
             (unsigned long)kCounterLimit,
             chainKey.index,
             counter);
-        OWSLogFlush();
         @throw [NSException exceptionWithName:InvalidMessageException
                                        reason:@"Exceeded message keys chain length limit"
                                      userInfo:@{}];
     }
-
+    
     while (chainKey.index < counter) {
-        MessageKeys *messageKeys = [chainKey throws_messageKeys];
+        MessageKeys *messageKeys = [chainKey messageKeys];
         [sessionState setMessageKeys:theirEphemeral messageKeys:messageKeys];
         chainKey = chainKey.nextChainKey;
     }
     
     [sessionState setReceiverChainKey:theirEphemeral chainKey:[chainKey nextChainKey]];
-    return [chainKey throws_messageKeys];
+    return [chainKey messageKeys];
 }
 
 /**
@@ -484,11 +387,11 @@ NS_ASSUME_NONNULL_BEGIN
     return versionByte;
 }
 
-- (int)throws_remoteRegistrationId:(nullable id)protocolContext
-{
-    SessionRecord *_Nullable record =
-        [self.sessionStore loadSession:self.recipientId deviceId:_deviceId protocolContext:protocolContext];
 
+- (int)remoteRegistrationId{
+    [self assertOnSessionCipherDispatchQueue];
+    SessionRecord *record = [self.sessionStore loadSession:self.recipientId deviceId:_deviceId];
+    
     if (!record) {
         @throw [NSException exceptionWithName:NoSessionException reason:@"Trying to get registration Id of a non-existing session." userInfo:nil];
     }
@@ -496,11 +399,10 @@ NS_ASSUME_NONNULL_BEGIN
     return record.sessionState.remoteRegistrationId;
 }
 
-- (int)throws_sessionVersion:(nullable id)protocolContext
-{
-    SessionRecord *_Nullable record =
-        [self.sessionStore loadSession:self.recipientId deviceId:_deviceId protocolContext:protocolContext];
-
+- (int)sessionVersion{
+    [self assertOnSessionCipherDispatchQueue];
+    SessionRecord *record = [self.sessionStore loadSession:self.recipientId deviceId:_deviceId];
+    
     if (!record) {
         @throw [NSException exceptionWithName:NoSessionException reason:@"Trying to get the version of a non-existing session." userInfo:nil];
     }
@@ -521,5 +423,3 @@ NS_ASSUME_NONNULL_BEGIN
 }
 
 @end
-
-NS_ASSUME_NONNULL_END

@@ -351,7 +351,7 @@
 	}
 	
 	NSNumber *cachedRowid = [connection->keyCache keyForObject:cacheKey];
-	if (cachedRowid != nil)
+	if (cachedRowid)
 	{
 		if (rowidPtr) *rowidPtr = [cachedRowid longLongValue];
 		return YES;
@@ -811,7 +811,7 @@
 		return object;
 	
 	NSNumber *cachedRowid = [connection->keyCache keyForObject:cacheKey];
-	if (cachedRowid != nil)
+	if (cachedRowid)
 	{
 		int64_t rowid = [cachedRowid longLongValue];
 		
@@ -920,7 +920,7 @@
 	}
 	
 	NSNumber *cachedRowid = [connection->keyCache keyForObject:cacheKey];
-	if (cachedRowid != nil)
+	if (cachedRowid)
 	{
 		int64_t rowid = [cachedRowid longLongValue];
 		
@@ -1064,7 +1064,7 @@
 		// Fetch via query.
 		
 		NSNumber *cachedRowid = [connection->keyCache keyForObject:cacheKey];
-		if (cachedRowid != nil)
+		if (cachedRowid)
 		{
 			int64_t rowid = [cachedRowid longLongValue];
 			
@@ -1233,7 +1233,7 @@
 	YapCollectionKey *cacheKey = [[YapCollectionKey alloc] initWithCollection:collection key:key];
 	
 	NSNumber *cachedRowid = [connection->keyCache keyForObject:cacheKey];
-	if (cachedRowid != nil)
+	if (cachedRowid)
 	{
 		int64_t rowid = [cachedRowid longLongValue];
 		
@@ -1328,7 +1328,7 @@
 	YapCollectionKey *cacheKey = [[YapCollectionKey alloc] initWithCollection:collection key:key];
 	
 	NSNumber *cachedRowid = [connection->keyCache keyForObject:cacheKey];
-	if (cachedRowid != nil)
+	if (cachedRowid)
 	{
 		int64_t rowid = [cachedRowid longLongValue];
 		
@@ -1434,7 +1434,7 @@
 	YapCollectionKey *cacheKey = [[YapCollectionKey alloc] initWithCollection:collection key:key];
 	
 	NSNumber *cachedRowid = [connection->keyCache keyForObject:cacheKey];
-	if (cachedRowid != nil)
+	if (cachedRowid)
 	{
 		int64_t rowid = [cachedRowid longLongValue];
 		
@@ -4129,7 +4129,7 @@
 		// Bind parameters.
 		// And move objects from the missingIndexes array into keyIndexDict.
 		
-		if (!keyIndexDict)
+		if (keyIndexDict)
 			keyIndexDict = [NSMutableDictionary dictionaryWithCapacity:numKeyParams];
 		else
 			[keyIndexDict removeAllObjects];
@@ -4263,8 +4263,6 @@
 	NSDictionary *extConnections = [connection extensions];
 	
 	[extConnections enumerateKeysAndObjectsUsingBlock:^(id key, id obj, BOOL __unused *stop) {
-	#pragma clang diagnostic push
-	#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 		
 		__unsafe_unretained NSString *extName = key;
 		__unsafe_unretained YapDatabaseExtensionConnection *extConnection = obj;
@@ -4282,8 +4280,6 @@
 				[extensions setObject:extTransaction forKey:extName];
 			}
 		}
-		
-	#pragma clang diagnostic pop
 	}];
 	
 	if (orderedExtensions == nil)
@@ -4897,10 +4893,6 @@
 			_object = [YapNull null];
 	}
 	
-	if (!found) {
-		[connection->insertedKeys addObject:cacheKey];
-	}
-	
 	[connection->objectCache setObject:object forKey:cacheKey];
 	[connection->objectChanges setObject:_object forKey:cacheKey];
 	
@@ -5436,7 +5428,6 @@
 	
 	[connection->objectChanges removeObjectForKey:cacheKey];
 	[connection->metadataChanges removeObjectForKey:cacheKey];
-	[connection->insertedKeys removeObject:cacheKey];
 	[connection->removedKeys addObject:cacheKey];
 	[connection->removedRowids addObject:@(rowid)];
 	
@@ -5648,7 +5639,6 @@
 				
 				[connection->objectChanges removeObjectForKey:cacheKey];
 				[connection->metadataChanges removeObjectForKey:cacheKey];
-				[connection->insertedKeys removeObject:cacheKey];
 				[connection->removedKeys addObject:cacheKey];
 			}
 			
@@ -5755,24 +5745,6 @@
 		}
 		
 		[connection->metadataChanges removeObjectsForKeys:toRemove];
-		[toRemove removeAllObjects];
-	}
-	
-	{ // insertedKeys
-		
-		for (NSString *key in connection->insertedKeys)
-		{
-			__unsafe_unretained YapCollectionKey *cacheKey = (YapCollectionKey *)key;
-			if ([cacheKey.collection isEqualToString:collection])
-			{
-				[toRemove addObject:cacheKey];
-			}
-		}
-		
-		for (NSString *cacheKey in toRemove)
-		{
-			[connection->insertedKeys removeObject:cacheKey];
-		}
 	}
 	
 	[connection->removedCollections addObject:collection];
@@ -5994,7 +5966,6 @@
 	
 	[connection->objectChanges removeAllObjects];
 	[connection->metadataChanges removeAllObjects];
-	[connection->insertedKeys removeAllObjects];
 	[connection->removedKeys removeAllObjects];
 	[connection->removedCollections removeAllObjects];
 	[connection->removedRowids removeAllObjects];

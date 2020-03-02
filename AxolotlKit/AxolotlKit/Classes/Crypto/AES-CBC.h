@@ -1,10 +1,12 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  AES-CBC.h
+//  AxolotlKit
+//
+//  Created by Frederic Jacobs on 22/07/14.
+//  Copyright (c) 2014 Frederic Jacobs. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>
-
-NS_ASSUME_NONNULL_BEGIN
 
 @interface AES_CBC : NSObject
 
@@ -18,9 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
  *  @return         ciphertext
  */
 
-+ (NSData *)throws_encryptCBCMode:(NSData *)data
-                          withKey:(NSData *)key
-                           withIV:(NSData *)iv NS_SWIFT_UNAVAILABLE("throws objc exceptions");
++(NSData*)encryptCBCMode:(NSData*)data withKey:(NSData*)key withIV:(NSData*)iv;
 
 /**
  *  Decrypts with AES in CBC mode
@@ -32,10 +32,6 @@ NS_ASSUME_NONNULL_BEGIN
  *  @return         plaintext
  */
 
-+ (NSData *)throws_decryptCBCMode:(NSData *)data
-                          withKey:(NSData *)key
-                           withIV:(NSData *)iv NS_SWIFT_UNAVAILABLE("throws objc exceptions");
++(NSData*)decryptCBCMode:(NSData*)data withKey:(NSData*)key withIV:(NSData*)iv;
 
 @end
-
-NS_ASSUME_NONNULL_END

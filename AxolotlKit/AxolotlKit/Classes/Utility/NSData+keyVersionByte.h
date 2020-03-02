@@ -1,5 +1,9 @@
 //
-//  Copyright (c) 2018 Open Whisper Systems. All rights reserved.
+//  NSData+keyVersionByte.h
+//  AxolotlKit
+//
+//  Created by Frederic Jacobs on 26/10/14.
+//  Copyright (c) 2014 Frederic Jacobs. All rights reserved.
 //
 
 #import <Foundation/Foundation.h>
@@ -7,8 +11,6 @@
 @interface NSData (keyVersionByte)
 
 - (instancetype)prependKeyType;
-
-- (instancetype)throws_removeKeyType NS_SWIFT_UNAVAILABLE("throws objc exceptions");
-- (nullable instancetype)removeKeyTypeAndReturnError:(NSError **)outError;
+- (instancetype)removeKeyType;
 
 @end
